@@ -1,0 +1,38 @@
+{
+  "name": "inharness",
+  "version": "0.1.1",
+  "description": "Orquestacion multiagente por suscripcion entre Claude, Codex y Kimi - sin API keys",
+  "bin": {
+    "inharness": "./bin/inharness.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "multi-agent",
+    "cli",
+    "claude",
+    "codex",
+    "kimi",
+    "orchestration",
+    "subscription"
+  ],
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "author": "Legado",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Legado/inharness.git"
+  },
+  "homepage": "https://github.com/Legado/inharness#readme",
+  "bugs": {
+    "url": "https://github.com/Legado/inharness/issues"
+  }
+}
