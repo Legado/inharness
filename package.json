@@ -1,9 +1,9 @@
 {
   "name": "inharness",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Orquestacion multiagente por suscripcion entre Claude, Codex y Kimi - sin API keys",
   "bin": {
-    "inharness": "./bin/inharness.js"
+    "inharness": "bin/inharness.js"
   },
   "files": [
     "bin",

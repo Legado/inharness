@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.1 — 2026-09-29
+
+### Cambiado
+- Documentación revisada: el README presenta el problema que resuelve
+  inharness y los problemas identificados durante el stress test previo a la
+  publicación, con su solución.
+- `package.json`: ruta del ejecutable normalizada (`bin/inharness.js`).
+
+Sin cambios de comportamiento en las skills.
+
 ## 0.2.0 — 2026-09-28
 
 Cambios en las tres variantes de la skill (`skills/claude/SKILL.md`,
