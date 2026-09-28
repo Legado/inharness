@@ -50,11 +50,12 @@ trabajo:
   Es la cache que evita repetir descubrimiento en cada activacion.
 - `.inharness/task.md` - tarea original, analisis, mapeo de tiers aprobado.
 - `.inharness/assignment.md` - tabla de estado por fila (id, rol, tier,
-  cli/modelo resuelto, archivos, depende-de, estado). Actualizala tras cada
-  fila, no al final.
+  cli/modelo resuelto, archivos, depende-de, estado: pendiente/en curso/
+  hecho/fallido/bloqueada-cupo). Actualizala tras cada fila, no al final.
 - `.inharness/log/<id>-<cli>.log` - salida cruda de cada llamada.
 
-Si `.inharness/assignment.md` ya existe con filas pendientes, ofrece
+Si `.inharness/assignment.md` ya existe con filas pendientes o
+`bloqueada-cupo`, ofrece
 continuar desde ahi en vez de replanificar desde cero.
 
 ## Eficiencia (lean, obligatorio - no es opcional)
@@ -84,10 +85,14 @@ suscripcion y tokens de esta sesion - tratalos como recurso escaso:
   entre si, lanza esas llamadas a Claude/Codex en paralelo (procesos en
   segundo plano) en vez de esperar una a una en secuencia. Solo esperas de
   verdad a una fila cuando otra depende de ella.
-- **Comprobacion mecanica, no narrada**: tras cada llamada, valida con lo
-  minimo que baste - codigo de salida y, si tocaba escribir un archivo, que
-  exista y no este vacio. Solo profundiza (leer contenido, correr un test)
-  si la fila de verdad lo requiere. Actualiza `.inharness/assignment.md` con
+- **Comprobacion proporcional, no narrada**: tras cada llamada, valida con
+  lo minimo que baste segun lo que produce la fila. Si solo produce un
+  documento o un archivo de datos, basta con el codigo de salida y que el
+  archivo exista y no este vacio. Si produce **codigo**, el codigo de salida
+  no prueba nada: ejecuta tu los tests o el comando que demuestre que
+  funciona y lee su resultado. **Nunca des por bueno el autoinforme del
+  sub-agente** ("tests en verde", "hecho"): es una afirmacion, no una
+  prueba. Actualiza `.inharness/assignment.md` con
   una edicion de una linea por fila - no lo reescribas entero ni lo narres
   salvo que algo falle o necesite tu decision.
 
@@ -128,14 +133,31 @@ No pongas por defecto el modelo mas nuevo/nombrado en "alta" solo por su
 nombre - mira los metadatos reales del catalogo. Muestralo en 3-4 lineas,
 nunca en parrafos.
 
+Para cada nivel, anota tambien un **respaldo** en otro CLI (p. ej.
+`media: codex/<modelo> · respaldo: claude/sonnet`). Las suscripciones tienen
+cupos (ventanas de 5 horas, limites semanales) y se agotan a mitad de
+trabajo - incluida la tuya: el respaldo decidido de antemano evita
+improvisar cuando pase (ver "Fila cortada por cupo" en el Paso 3).
+
 ## Paso 2 - Entender la tarea y proponer el reparto
 
 2-3 frases: que tan acotada esta la tarea y por que el numero de filas
 propuesto es el que hace falta (nunca una plantilla fija de roles). Cada
 fila: que hace (frase corta), tier, archivos (sin solape), de que depende.
 
+**Ficheros compartidos: solo los toca el orquestador.** El "sin solape" no
+basta con los ficheros que usan varias filas a la vez aunque ninguna los
+"posea": configuracion de tests (`conftest.py`, `pytest.ini`,
+`jest.config.*`), manifiestos y dependencias (`pyproject.toml`,
+`package.json`, lockfiles) y modulos comunes que importan varias filas. No
+los asignes a filas que corren en paralelo: preparalos tu antes de
+lanzarlas, o despues con lo que pidan. Indica en el prompt de cada fila que
+no los modifique y que, si necesita un cambio, lo diga en su resumen.
+
 Regla dura: si una fila audita/testea el trabajo de otra, resuelvela a un
-CLI DISTINTO al de la fila que produjo ese trabajo.
+CLI DISTINTO al de la fila que produjo ese trabajo. La fila de verificacion
+contrasta resultados reales (ejecuta los tests, compara la salida con lo
+pedido) y no se limita a leer el resumen de la fila verificada.
 
 Presentalo al usuario y espera su aprobacion explicita antes de ejecutar
 nada.
@@ -155,6 +177,14 @@ nada.
   ```
   El `-` + stdin es obligatorio si el prompt es largo (evita el limite de
   ~8191 caracteres de linea de comandos de cmd.exe en Windows).
+
+  **El sandbox `workspace-write` de Codex no tiene red.** No puede instalar
+  dependencias (`pip`, `npm`), descargar nada ni probar contra servicios o
+  webs en vivo: esos pasos fallan o se saltan en silencio, y Codex a veces
+  los da por hechos. Antes de asignar una fila a Codex: instala tu las
+  dependencias que vaya a necesitar, y deja para ti (o para Claude) las
+  pruebas que necesiten red. Diselo en el prompt ("no hay red; no ejecutes
+  pip/npm install; las dependencias ya estan instaladas").
 - **Fila resuelta a Claude**:
   ```bash
   claude -p "<prompt>" --model <haiku|sonnet|opus> \
@@ -164,6 +194,18 @@ nada.
 
 Verifica cada fila antes de dar la siguiente por buena si depende de ella.
 Actualiza `.inharness/assignment.md` inmediatamente tras cada fila.
+
+**Fila cortada por cupo.** Si un CLI responde con un limite de uso ("usage
+limit", "quota", "rate limit", un 403/429 que hable de cupo o de la ventana
+de 5 horas) o se queda sin responder dentro de su tiempo maximo:
+1. Marca la fila `bloqueada-cupo` en `.inharness/assignment.md`, con la hora
+   y el mensaje recibido.
+2. Relanzala en el **respaldo** de su nivel (Paso 1). Dale en el prompt lo
+   que la fila anterior ya dejo hecho (ficheros parciales) para que continue
+   y no empiece de cero. Avisa al usuario en una linea.
+3. Si el respaldo tambien esta limitado, deja la fila en `bloqueada-cupo` y
+   dilo. Al retomar el trabajo mas tarde, las filas `bloqueada-cupo` se
+   reintentan antes que las pendientes.
 
 ## Paso 4 - QA final y cierre
 

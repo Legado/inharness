@@ -49,12 +49,12 @@ cambie de CLI orquestador a mitad de proceso:
 - `.inharness/task.md` — tarea original, análisis, mapeo de tiers aprobado.
 - `.inharness/assignment.md` — tabla de estado por fila: id, rol, tier,
   cli/modelo resuelto, archivos, depende-de, estado (pendiente/en curso/
-  hecho/fallido). Actualízala tú mismo después de cada fila, nunca al final.
+  hecho/fallido/bloqueada-cupo). Actualízala tú mismo después de cada fila, nunca al final.
 - `.inharness/log/<id>-<cli>.log` — salida cruda de cada llamada, para
   auditoría si algo falla.
 
 Antes de proponer nada, comprueba si `.inharness/assignment.md` ya existe
-con filas pendientes de una sesión anterior — si es así, ofrece continuar
+con filas pendientes o `bloqueada-cupo` de una sesión anterior — si es así, ofrece continuar
 desde ahí en vez de re-planificar desde cero.
 
 ## Eficiencia (lean, obligatorio — no es opcional)
@@ -90,11 +90,14 @@ suscripción y tokens de esta conversación — trátalos como recurso escaso:
   `run_in_background: true` (el mismo mecanismo que ya usa esta sesión para
   sus propios subagentes) en vez de esperar una a una en secuencia. Solo
   esperas de verdad a una fila cuando otra depende de ella.
-- **Comprobación mecánica, no narrada**: tras cada llamada, valida con lo
-  mínimo que baste — código de salida y, si tocaba escribir un archivo, que
-  exista y no esté vacío. Eso es la comprobación por defecto; solo profundiza
-  (leer contenido, correr un test) si la fila es de las que de verdad lo
-  requieren (p.ej. la fila de tests). Actualiza `.inharness/assignment.md`
+- **Comprobación proporcional, no narrada**: tras cada llamada, valida con
+  lo mínimo que baste según lo que produce la fila. Si solo produce un
+  documento o un archivo de datos, basta con el código de salida y que el
+  archivo exista y no esté vacío. Si produce **código**, el código de salida
+  no prueba nada: ejecuta tú los tests o el comando que demuestre que
+  funciona y lee su resultado. **Nunca des por bueno el autoinforme del
+  sub-agente** ("tests en verde", "hecho"): es una afirmación, no una
+  prueba. Actualiza `.inharness/assignment.md`
   con una edición de una línea por fila (id · estado · resultado en pocas
   palabras) — no lo reescribas entero ni lo narres al usuario salvo que algo
   falle o necesite su decisión.
@@ -152,6 +155,12 @@ más se nombra ("el más nuevo") en "alta" solo por su nombre. Mira
 `default_reasoning_level` / `defaultEffort` del catálogo real. Muestra este
 mapeo en 3-4 líneas, nunca en párrafos.
 
+Para cada nivel, anota también un **respaldo** en otro CLI (p. ej.
+`media: kimi/kimi-for-coding · respaldo: codex/<modelo>`). Las suscripciones
+tienen cupos (ventanas de 5 horas, límites semanales) y se agotan a mitad de
+trabajo: el respaldo decidido de antemano evita improvisar cuando pase
+(ver "Fila cortada por cupo" en el Paso 3).
+
 ## Paso 2 — Entender la tarea y proponer el reparto
 
 Antes de proponer filas, evalúa en 2-3 frases qué tan acotada está la tarea
@@ -163,10 +172,23 @@ Cada fila declara: qué hace (frase corta), a qué tier pertenece, qué
 archivos toca (sin solape con otra fila — si se solapan, usa dependencia en
 vez de paralelo), y de qué filas depende.
 
+**Ficheros compartidos: solo los toca el orquestador.** El "sin solape" no
+basta con los ficheros que usan varias filas a la vez aunque ninguna los
+"posea": configuración de tests (`conftest.py`, `pytest.ini`, `jest.config.*`),
+manifiestos y dependencias (`pyproject.toml`, `package.json`, lockfiles) y
+módulos comunes que importan varias filas. No los asignes a filas que corren
+en paralelo: prepáralos tú antes de lanzarlas, o después con lo que pidan.
+Indica en el prompt de cada fila que no los modifique y que, si necesita un
+cambio, lo diga en su resumen. Una edición concurrente en uno de estos
+ficheros (un BOM, una dependencia, una fixture) rompe a la vez el trabajo de
+todas las filas.
+
 **Regla dura de verificación**: si una fila audita/testea el trabajo de
 otra, debe resolverse a un CLI DISTINTO al de la fila que produjo ese
 trabajo. Decídelo tú explícitamente al resolver el tier (no dejes que dé la
-casualidad).
+casualidad). La fila de verificación contrasta resultados reales (ejecuta
+los tests, compara la salida con lo pedido) y no se limita a leer el
+resumen de la fila verificada.
 
 Preséntaselo al usuario con `AskUserQuestion` (tabla/preview en el prompt) —
 opciones tipo "Aprobar tal cual", "Cambiar el mapeo de modelos", "Cambiar
@@ -194,6 +216,14 @@ Para cada fila, en orden de dependencias:
   El `-` + heredoc/stdin es obligatorio si el prompt es largo: pasarlo como
   argumento revienta el límite de ~8191 caracteres de línea de comandos de
   `cmd.exe` (que envuelve a `codex.cmd` en Windows) y falla en silencio.
+
+  **El sandbox `workspace-write` de Codex no tiene red.** No puede instalar
+  dependencias (`pip`, `npm`), descargar nada ni probar contra servicios o
+  webs en vivo: esos pasos fallan o se saltan en silencio, y Codex a veces
+  los da por hechos. Antes de asignar una fila a Codex: instala tú las
+  dependencias que vaya a necesitar, y deja para ti (o para otro CLI) las
+  pruebas que necesiten red. Díselo en el prompt ("no hay red; no ejecutes
+  pip/npm install; las dependencias ya están instaladas").
 - **Fila resuelta a Kimi**:
   ```bash
   kimi -m kimi-code/<modelo> -p "<prompt>"
@@ -210,6 +240,18 @@ antes de dar por buena la siguiente si depende de ella. Actualiza el estado
 de esa fila en `.inharness/assignment.md` inmediatamente (no esperes al
 final) — es lo que permite retomar el trabajo si el usuario corta la sesión
 a mitad de proceso.
+
+**Fila cortada por cupo.** Si un CLI responde con un límite de uso ("usage
+limit", "quota", "rate limit", un 403/429 que hable de cupo o de la ventana
+de 5 horas) o se queda sin responder dentro de su tiempo máximo:
+1. Marca la fila `bloqueada-cupo` en `.inharness/assignment.md`, con la hora
+   y el mensaje recibido.
+2. Relánzala en el **respaldo** de su nivel (Paso 1). Dale en el prompt lo
+   que la fila anterior ya dejó hecho (ficheros parciales) para que continúe
+   y no empiece de cero. Avisa al usuario en una línea.
+3. Si el respaldo también está limitado, deja la fila en `bloqueada-cupo` y
+   dilo. Al retomar el trabajo más tarde, las filas `bloqueada-cupo` se
+   reintentan antes que las pendientes.
 
 ## Paso 4 — QA final y cierre
 

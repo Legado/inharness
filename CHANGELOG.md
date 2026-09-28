@@ -1,0 +1,50 @@
+# Changelog
+
+## 0.2.0 — 2026-09-28
+
+Cambios en las tres variantes de la skill (`skills/claude/SKILL.md`,
+`skills/codex/SKILL.md`, `skills/kimi/inharness.md`). `syncSkills` las
+reinstala automáticamente en el siguiente arranque de `inharness` al detectar
+la nueva versión.
+
+### Añadido
+- **Respaldo por cupo.** El mapeo del Paso 1 incluye un respaldo en otro CLI
+  para cada nivel. Nuevo protocolo "Fila cortada por cupo" en el Paso 3:
+  detectar el límite (usage limit, quota, rate limit, 403/429 de cupo o falta
+  de respuesta), marcar la fila `bloqueada-cupo` con hora y mensaje, relanzarla
+  en el respaldo continuando desde los ficheros parciales y, si el respaldo
+  también está limitado, dejarla bloqueada. Al retomar, las filas
+  `bloqueada-cupo` tienen prioridad.
+- **Estado `bloqueada-cupo`** en `.inharness/assignment.md`, también tenido en
+  cuenta al ofrecer continuar una sesión anterior.
+- **Ficheros compartidos.** El Paso 2 prohíbe asignar a filas paralelas los
+  ficheros que usan varias filas (configuración de tests, manifiestos y
+  lockfiles, módulos comunes): los prepara el orquestador, y las filas piden
+  los cambios en su resumen.
+- **Aviso de red en Codex.** El sandbox `workspace-write` no tiene red: el
+  orquestador instala las dependencias antes, deja para sí u otro CLI las
+  pruebas con red y lo indica en el prompt. En la variante de Codex (Codex
+  como orquestador), las filas que necesitan red se asignan a Claude o Kimi.
+
+### Cambiado
+- **"Comprobación mecánica" pasa a "comprobación proporcional".** Para filas
+  que solo producen documentos o datos, sigue bastando con el código de
+  salida y que el fichero exista y no esté vacío. Para filas que producen
+  código, el orquestador ejecuta los tests o el comando que lo demuestre. El
+  autoinforme del sub-agente nunca cuenta como prueba.
+- **Regla de verificación.** La fila que audita a otra contrasta resultados
+  reales (ejecuta tests, compara salidas) en lugar de leer el resumen.
+
+### Contexto
+Los cuatro cambios responden a problemas identificados durante el stress test
+previo a la publicación, orquestando desarrollos con decenas de tareas en
+paralelo entre los tres CLIs: un cupo de uso agotado a mitad de una tarea,
+entregables dados por buenos con errores reales, una edición concurrente en un
+fichero compartido que rompió varias tareas a la vez, y fallos silenciosos de
+instalación de dependencias en el sandbox de Codex.
+
+## 0.1.1 — 2026-09-26
+
+Primera versión publicada: detección de CLIs por suscripción, elección de
+orquestador, traspaso real del terminal e instalación de las skills nativas en
+Claude Code, Codex y Kimi Code.

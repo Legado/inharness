@@ -2,7 +2,7 @@
 
 **Reparte una tarea entre Claude, Codex y Kimi usando las suscripciones que ya pagas. Sin API keys. Sin facturar por token. Sin salir del CLI donde ya trabajas.**
 
-> Versión 0.1. Antes de publicarla se sometió a un stress test: orquestación
+> Versión 0.2. Antes de publicarla se sometió a un stress test: orquestación
 > de desarrollos reales con decenas de tareas en paralelo entre los tres CLIs.
 > Lo que falló durante esas pruebas está documentado más abajo, junto con cómo
 > se resolvió. Si encuentras un borde que no está cubierto, abre un issue.
@@ -47,6 +47,8 @@ piezas que les tocan.
 Todos aparecieron usando la herramienta en condiciones reales, no sobre el
 papel. Por eso están documentados en lugar de pulidos hasta desaparecer.
 
+**Integración entre CLIs**
+
 - **Kimi se bloqueaba en la segunda pregunta** cuando la entrada llegaba por
   pipe. Era un problema conocido de Node con `readline` y streams no
   interactivos. Se resolvió consumiendo el iterador de líneas directamente.
@@ -68,6 +70,28 @@ papel. Por eso están documentados en lugar de pulidos hasta desaparecer.
   proyecto. Cada skill incluye ahora una regla explícita: si algo falla, se
   para y se pregunta.
 
+**Orquestación a escala (0.2.0)**
+
+- **Los cupos se agotan a mitad de trabajo.** Un CLI alcanzó su ventana de
+  uso de 5 horas en mitad de una tarea. Cada nivel del mapeo lleva ahora un
+  respaldo en otro CLI. Una tarea cortada se marca `bloqueada-cupo`, se
+  relanza en el respaldo continuando desde lo que ya estaba escrito y, al
+  retomar, se reintenta antes que las pendientes.
+- **"Código de salida 0" no significa "funciona".** Entregables marcados como
+  "tests en verde" por el propio sub-agente contenían errores reales. En las
+  tareas que producen código, el orquestador ejecuta los tests él mismo y
+  nunca acepta el autoinforme de un sub-agente como prueba.
+- **Los ficheros compartidos rompen el trabajo en paralelo.** Repartir los
+  ficheros entre tareas no basta: la configuración de tests, los manifiestos y
+  los módulos comunes los usan todas. Una edición concurrente (un BOM en
+  `conftest.py`) rompió varias tareas a la vez. Ahora esos ficheros solo los
+  toca el orquestador.
+- **El sandbox de Codex no tiene red.** Con `--sandbox workspace-write`, Codex
+  no puede instalar dependencias ni probar nada en vivo, y a veces lo da por
+  hecho. El orquestador instala las dependencias antes, y las pruebas con red
+  las hace él o las asigna a otro CLI.
+
+El detalle de cada versión está en [CHANGELOG.md](CHANGELOG.md).
 
 ## Cómo se ve
 
@@ -92,9 +116,9 @@ Y dentro de esa sesión, cuando haga falta:
 
 inharness activo - orquestando entre Codex, Claude y Kimi.
 
-alta  : codex/gpt-6-astra @ high
-media : kimi/kimi-for-coding    
-baja  : claude/haiku            
+alta  : codex/gpt-6-astra @ high    · respaldo: claude/opus
+media : kimi/kimi-for-coding        · respaldo: codex/gpt-6-luna
+baja  : claude/haiku                · respaldo: kimi/kimi-for-coding
 
 #1 [media] estructura HTML/CSS de la landing        → kimi/kimi-for-coding
 #2 [baja]  copy y textos                            → claude/haiku
@@ -139,12 +163,19 @@ menos uno de los tres: [Claude Code](https://claude.com/product/claude-code),
 3. **Entiende la tarea antes de repartir.** Una tarea trivial no genera cuatro
    roles de plantilla; una tarea ambigua genera primero una fila para acotarla.
 4. **Nunca deja que un modelo se revise a sí mismo.** Si una tarea verifica el
-   trabajo de otra, va a un CLI distinto del que lo produjo.
+   trabajo de otra, va a un CLI distinto del que lo produjo, y contrasta
+   resultados reales en lugar de leer un resumen.
 5. **Guarda el estado en `.inharness/`**, dentro de tu carpeta de trabajo,
    para que el reparto sobreviva a que cierres la sesión o cambies de CLI
    orquestador a mitad de camino.
 6. **Pide aprobación antes de ejecutar nada**, y el mapeo de modelos se puede
    cambiar en cualquier momento.
+7. **Sobrevive a los límites de cupo:** cada nivel tiene un respaldo en otro
+   CLI.
+8. **No se fía del "hecho" de un sub-agente:** en tareas de código ejecuta los
+   tests antes de darlas por buenas.
+9. **Protege los ficheros compartidos:** configuración de tests, manifiestos y
+   módulos comunes solo los toca el orquestador.
 
 ## Lo que no hace (todavía, o nunca)
 

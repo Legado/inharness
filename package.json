@@ -1,6 +1,6 @@
 {
   "name": "inharness",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Orquestacion multiagente por suscripcion entre Claude, Codex y Kimi - sin API keys",
   "bin": {
     "inharness": "./bin/inharness.js"
@@ -10,6 +10,7 @@
     "src",
     "skills",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "keywords": [
