@@ -154,6 +154,13 @@ npm install -g inharness
 inharness
 ```
 
+> **¿npm va por detrás?** Si el paquete publicado en npm no es la versión más
+> reciente, instala directamente desde GitHub:
+>
+> ```bash
+> npm install -g github:Legado/inharness
+> ```
+
 La primera vez que se ejecuta, instala (o actualiza) las skills nativas en las
 tres herramientas:
 
