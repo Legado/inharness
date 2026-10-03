@@ -91,6 +91,20 @@ papel. Por eso están documentados en lugar de pulidos hasta desaparecer.
   hecho. El orquestador instala las dependencias antes, y las pruebas con red
   las hace él o las asigna a otro CLI.
 
+**Detección y traspaso multiplataforma (0.2.2)**
+
+- **Claude y Kimi no se detectaban en Windows.** Los globales npm se instalan
+  como shims `.cmd`; `spawnCli('claude', ...)` fallaba en silencio porque el
+  wrapper `cmd.exe` solo se activaba para rutas que ya terminaban en `.cmd`.
+  Un nuevo helper prueba el nombre plano primero y, si falla, reintenta con
+  `.cmd` antes de declarar el CLI como no instalado.
+- **El traspaso de terminal fallaba en Windows para Claude y Kimi.** `handoff.js`
+  ahora usa el `resolvedCmd` detectado en el descubrimiento y aplica el mismo
+  wrapper `cmd.exe /d /s /c` que ya se usaba para Codex.
+- **Codex no se detectaba en Linux/Mac.** `detectCodex` invocaba `codex.cmd`
+  directamente, lo que fallaba fuera de Windows. Ahora pasa también por el
+  mismo helper de resolución multiplataforma.
+
 El detalle de cada versión está en [CHANGELOG.md](CHANGELOG.md).
 
 ## Cómo se ve
