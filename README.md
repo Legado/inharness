@@ -2,7 +2,7 @@
 
 **Reparte una tarea entre Claude, Codex y Kimi usando las suscripciones que ya pagas. Sin API keys. Sin facturar por token. Sin salir del CLI donde ya trabajas.**
 
-> Versión 0.2. Antes de publicarla se sometió a un stress test: orquestación
+> Versión 0.2.2. Antes de publicarla se sometió a un stress test: orquestación
 > de desarrollos reales con decenas de tareas en paralelo entre los tres CLIs.
 > Lo que falló durante esas pruebas está documentado más abajo, junto con cómo
 > se resolvió. Si encuentras un borde que no está cubierto, abre un issue.
