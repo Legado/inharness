@@ -31,10 +31,10 @@ async function main() {
     process.exit(1);
   }
 
-  const chosen = available[idx].id;
-  console.log(`\nEntrando en ${chosen}. Trabaja normal — cuando quieras modo multiagente, invoca la skill/agente "inharness" (en Claude: /inharness; en Codex: $inharness; en Kimi: ya viene cargado).\n`);
+  const chosenCli = available[idx];
+  console.log(`\nEntrando en ${chosenCli.id}. Trabaja normal — cuando quieras modo multiagente, invoca la skill/agente "inharness" (en Claude: /inharness; en Codex: $inharness; en Kimi: ya viene cargado).\n`);
 
-  const code = await handoff(chosen);
+  const code = await handoff(chosenCli);
   process.exit(code);
 }
 

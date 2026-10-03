@@ -5,38 +5,25 @@ const path = require('node:path');
 const os = require('node:os');
 const { spawnCli } = require('./spawnCli');
 
-/**
- * Paso 0 del protocolo (ver orchestration/cli-registry.md del POC):
- * descubrimiento en caliente, nunca una lista de modelos hardcodeada.
- * Verifica también que la autenticación sea por suscripción, no por API key.
- *
- * La SINTAXIS de invocacion (flags en src/headless.js) si esta fijada en
- * codigo - no es razonable "auto-extraerla" del --help (texto libre, no
- * estructurado) con la misma fiabilidad que el catalogo de modelos (JSON).
- * Lo que si podemos hacer: avisar cuando la version instalada no es la
- * ultima que probamos de verdad, en vez de asumir en silencio que la
- * sintaxis vieja sigue siendo valida.
- */
-const LAST_VERIFIED_VERSION = {
-  codex: '0.157.1',
-  kimi: '2.1.1',
-  claude: '2.1.268',
-};
-
-function versionNote(id, versionString) {
-  const verified = LAST_VERIFIED_VERSION[id];
-  if (!verified) return { verified: false, note: 'sin version de referencia registrada' };
-  const matches = (versionString || '').includes(verified);
-  return matches
-    ? { verified: true, note: null }
-    : { verified: false, note: `version distinta a la ultima verificada (${verified}) - la sintaxis de invocacion podria haber cambiado` };
+// Intenta localizar un CLI por nombre. En Windows los globales npm son .cmd;
+// probamos primero el nombre plano (funciona en Linux/Mac y a veces en Win)
+// y luego la variante .cmd para no romper en ninguna plataforma.
+function resolveCmd(name) {
+  const plain = spawnCli(name, ['--version']);
+  if (plain.ok) return { cmd: name, version: plain.stdout.trim() };
+  if (os.platform() === 'win32') {
+    const dotCmd = spawnCli(name + '.cmd', ['--version']);
+    if (dotCmd.ok) return { cmd: name + '.cmd', version: dotCmd.stdout.trim() };
+  }
+  return null;
 }
 
 function detectCodex() {
-  const version = spawnCli('codex.cmd', ['--version']);
-  if (!version.ok) return { id: 'codex', installed: false };
+  const resolved = resolveCmd('codex');
+  if (!resolved) return { id: 'codex', installed: false };
+  const { cmd, version } = resolved;
 
-  const status = spawnCli('codex.cmd', ['login', 'status']);
+  const status = spawnCli(cmd, ['login', 'status']);
   const statusText = `${status.stdout}${status.stderr}`;
   const subscriptionOk = /logged in/i.test(statusText);
 
@@ -58,29 +45,21 @@ function detectCodex() {
       }));
   } catch {
     // Cache no disponible todavia (primer uso de codex en esta maquina).
-    // No es fatal: el orquestador recibira una lista vacia y lo señalamos.
   }
 
-  return {
-    id: 'codex',
-    installed: true,
-    version: version.stdout.trim(),
-    versionCheck: versionNote('codex', version.stdout),
-    subscriptionOk,
-    authRaw: statusText.trim(),
-    models,
-  };
+  return { id: 'codex', installed: true, version, resolvedCmd: cmd, subscriptionOk, authRaw: statusText.trim(), models };
 }
 
 function detectKimi() {
-  const version = spawnCli('kimi', ['--version']);
-  if (!version.ok) return { id: 'kimi', installed: false };
+  const resolved = resolveCmd('kimi');
+  if (!resolved) return { id: 'kimi', installed: false };
+  const { cmd, version } = resolved;
 
-  const list = spawnCli('kimi', ['provider', 'list']);
+  const list = spawnCli(cmd, ['provider', 'list']);
   const subscriptionOk = /source=oauth/i.test(list.stdout);
 
   let models = [];
-  const listJson = spawnCli('kimi', ['provider', 'list', '--json']);
+  const listJson = spawnCli(cmd, ['provider', 'list', '--json']);
   try {
     const parsed = JSON.parse(listJson.stdout);
     models = Object.entries(parsed.models || {}).map(([alias, m]) => ({
@@ -96,24 +75,15 @@ function detectKimi() {
     // sin catalogo parseable; se reporta vacio
   }
 
-  return {
-    id: 'kimi',
-    installed: true,
-    version: version.stdout.trim(),
-    versionCheck: versionNote('kimi', version.stdout),
-    subscriptionOk,
-    authRaw: list.stdout.trim(),
-    models,
-  };
+  return { id: 'kimi', installed: true, version, resolvedCmd: cmd, subscriptionOk, authRaw: list.stdout.trim(), models };
 }
 
 function detectClaude() {
-  const version = spawnCli('claude', ['--version']);
-  if (!version.ok) return { id: 'claude', installed: false };
+  const resolved = resolveCmd('claude');
+  if (!resolved) return { id: 'claude', installed: false };
+  const { cmd, version } = resolved;
 
-  // Heuristica: si hay ANTHROPIC_API_KEY seteada, puede estar en modo API
-  // en vez de suscripcion. No hay (todavia) un comando de status mas fino
-  // que comprobemos aqui - ver TODO en orchestration/cli-registry.md.
+  // Heuristica: si hay ANTHROPIC_API_KEY seteada, puede estar en modo API.
   const subscriptionOk = !process.env.ANTHROPIC_API_KEY;
 
   const models = [
@@ -125,8 +95,8 @@ function detectClaude() {
   return {
     id: 'claude',
     installed: true,
-    version: version.stdout.trim(),
-    versionCheck: versionNote('claude', version.stdout),
+    version,
+    resolvedCmd: cmd,
     subscriptionOk,
     authRaw: subscriptionOk ? 'sin ANTHROPIC_API_KEY (suscripcion por defecto)' : 'ANTHROPIC_API_KEY seteada',
     models,

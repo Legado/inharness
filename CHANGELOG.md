@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.2.2 — 2026-10-04
+
+### Corregido
+- **Detección de Claude y Kimi en Windows.** Los globales npm se instalan como
+  shims `.cmd`; `spawnCli('claude', ...)` y `spawnCli('kimi', ...)` fallaban en
+  silencio porque el wrapper `cmd.exe` solo se activaba para rutas que ya
+  terminaban en `.cmd`. El nuevo helper `resolveCmd(name)` prueba el nombre
+  plano primero (funciona en Linux/Mac y ejecutables nativos de Windows) y, si
+  falla, reintenta con `name.cmd` antes de declarar el CLI como no instalado.
+- **Traspaso de terminal para Claude y Kimi en Windows.** `handoff.js` ahora
+  usa el `resolvedCmd` detectado en el descubrimiento y aplica el mismo wrapper
+  `cmd.exe /d /s /c` que ya se usaba para Codex.
+- **Detección de Codex en Linux/Mac.** `detectCodex` invocaba `codex.cmd`
+  directamente, lo que fallaba fuera de Windows. Ahora pasa también por
+  `resolveCmd`.
+
+### Cambiado
+- Eliminadas las advertencias de versión. La comprobación contra versiones
+  hardcodeadas generaba falsos positivos en cualquier actualización de los CLIs
+  y no aportaba información accionable. La herramienta funciona con cualquier
+  versión instalada.
+
 ## 0.2.1 — 2026-09-29
 
 ### Cambiado

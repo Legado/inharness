@@ -34,9 +34,7 @@ function renderDiscovery(discovered) {
     const mark = d.subscriptionOk ? '✔' : '⚠';
     const authNote = d.subscriptionOk ? d.authRaw : `${d.authRaw} (modo API detectado, se excluye)`;
     console.log(`  ${mark} ${d.id.padEnd(8)} ${d.version || ''}  — ${authNote}  [${d.models.length} modelos]`);
-    if (d.versionCheck && !d.versionCheck.verified) {
-      console.log(`      ⚠ ${d.versionCheck.note}`);
-    }
+
   }
   console.log('');
 }
