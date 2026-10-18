@@ -2,7 +2,7 @@
 
 **Reparte una tarea entre Claude, Codex y Kimi usando las suscripciones que ya pagas. Sin API keys. Sin facturar por token. Sin salir del CLI donde ya trabajas.**
 
-> Versión 0.2.2. Antes de publicarla se sometió a un stress test: orquestación
+> Versión 0.3.0. Antes de publicarla se sometió a un stress test: orquestación
 > de desarrollos reales con decenas de tareas en paralelo entre los tres CLIs.
 > Lo que falló durante esas pruebas está documentado más abajo, junto con cómo
 > se resolvió. Si encuentras un borde que no está cubierto, abre un issue.
@@ -217,6 +217,7 @@ src/discovery.js       detección en caliente de CLIs, modelos y suscripción
 src/handoff.js         traspasa el control real del terminal al CLI elegido
 src/syncSkills.js      instala/actualiza las skills nativas en cada CLI
 src/spawnCli.js        invocación robusta entre plataformas (incl. .cmd de Windows)
+src/paneLauncher.js    lanza las filas delegadas con visibilidad en vivo (pane/tab)
 skills/claude/         SKILL.md para Claude Code
 skills/codex/          SKILL.md + agents/openai.yaml para Codex
 skills/kimi/           agente markdown para Kimi Code
@@ -226,6 +227,19 @@ skills/kimi/           agente markdown para Kimi Code
 (`stdio: inherit`). Cada skill invoca a los otros dos CLIs por línea de
 comandos, con la sintaxis verificada contra sus versiones actuales, y avisa si
 detecta una versión distinta de la probada.
+
+**Visibilidad en vivo (pane → tab → fallback).** Cuando el orquestador
+delega una fila en otro CLI, la invocación no corre invisible detrás de un
+Bash: `src/paneLauncher.js` la abre en un split-pane de Windows Terminal si
+la sesión ya vive dentro de él (`WT_SESSION`), en una pestaña nueva si hay
+`wt.exe` en el PATH aunque no estemos dentro, y cae a la ejecución invisible
+y síncrona de siempre (`spawnCli.js`) si no hay Windows Terminal — una caída
+esperada, no un error. En pane/tab el proceso lanza `wt.exe` detached y no
+bloquea al orquestador; su salida combinada se vuelca al log habitual
+(`.inharness/log/<id>-<cli>.log`) cerrando con una línea sentinel
+(`###INHARNESS_EXIT:<código>###`), que `waitForCompletion` sondea para saber
+cuándo terminó la fila y con qué código. El usuario no invoca nada: abrir el
+pane/tab es un efecto automático del propio código.
 
 ## Contribuir
 

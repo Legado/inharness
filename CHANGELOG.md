@@ -1,5 +1,70 @@
 # Changelog
 
+## 0.3.0 — 2026-10-18
+
+### Añadido
+- **Visibilidad en vivo del trabajo delegado (Windows Terminal).** Nuevo
+  `src/paneLauncher.js` con cuatro exports: `launchInPane`,
+  `waitForCompletion`, `hasWindowsTerminal` e `insideWindowsTerminal`.
+  `launchInPane` decide el modo en este orden: `pane` (`wt.exe split-pane`)
+  si la sesión ya corre dentro de Windows Terminal (`WT_SESSION`), `tab`
+  (`wt.exe new-tab`) si hay `wt.exe` en el PATH aunque no estemos dentro, y
+  `fallback` (la ejecución invisible y síncrona de siempre vía `spawnCli`) si
+  no hay Windows Terminal — una caída esperada, nunca un error. En pane/tab
+  el proceso lanza `wt.exe` detached, no bloquea al orquestador y queda
+  visible mientras corre; su stdout+stderr combinado se vuelca al log
+  habitual cerrando con la línea sentinel `###INHARNESS_EXIT:<código>###`,
+  que `waitForCompletion` sondea (por defecto cada 1 s, hasta 10 min) para
+  devolver `ok`/`exitCode`/`output` o `timedOut`. En fallback el log queda en
+  el mismo formato, así que el resto del flujo no nota la diferencia. El
+  usuario no invoca nada: la apertura del pane/tab es un efecto automático
+  del código.
+- **Paso 3 de las tres skills** (`skills/claude/SKILL.md`,
+  `skills/codex/SKILL.md`, `skills/kimi/inharness.md`): nota + ejemplo para
+  lanzar las filas delegadas con `node -e` cargando
+  `paneLauncher.launchInPane(...)` (Bash con `run_in_background: true`, como
+  el paralelismo ya existente), log en `.inharness/log/<id>-<cli>.log` y
+  espera con `waitForCompletion` cuando una fila depende de otra.
+
+### Cambiado
+- `src/spawnCli.js` queda intacto: sigue usándose para los probes invisibles
+  del descubrimiento (Paso 0) y como motor del modo fallback.
+
+### Corregido
+- **`input` colgaba para siempre en modo pane/tab.** El `input` (el prompt
+  que recibe un CLI como Codex) se escribía en el stdin del propio `wt.exe`
+  lanzado, pero `wt.exe` no reenvía su stdin al pane/tab que crea — son
+  consolas distintas. El proceso real se quedaba esperando una entrada que
+  nunca llegaba, sin escribir nunca la línea sentinel. Ahora el `input` se
+  escribe antes en un fichero temporal y el helper que corre dentro del
+  pane/tab lo lee de ahí y lo vuelca en el stdin real del proceso, borrando
+  el fichero al terminar. Verificado end-to-end (pane real + `input` real
+  llegando al proceso hijo), no solo por lectura de código.
+- `spawn('wt.exe', ...)` ahora cae a `fallback` si lanza excepción al
+  arrancar (antes no estaba cubierto).
+- **`windowsHide: true` en el `spawn('wt.exe', ...)` dejaba el pane/tab
+  oculto.** El proceso arrancaba y terminaba bien (log y sentinel correctos),
+  pero nunca aparecía nada en pantalla — justo lo contrario de lo que pide
+  esta función. Confirmado en vivo con el usuario: sin `windowsHide`, la
+  pestaña/ventana de Windows Terminal se ve.
+- **Nombres de comando sin `.cmd` fallaban dentro del pane.** Shims npm como
+  `kimi` existen como script plano (resuelto por un shell POSIX) y como
+  `kimi.cmd` (el que necesita `CreateProcess` sin shell). Si el llamador pasa
+  el nombre plano, el proceso moría con ENOENT en milisegundos y la pestaña
+  se cerraba sola antes de que nadie llegara a verla. Nuevo
+  `resolveWindowsCmd(command)` prueba si existe `<command>.cmd` (igual que ya
+  hace `discovery.js` para `spawnCli`) y lo usa si lo encuentra, tanto en
+  pane/tab como en fallback.
+- **Modo `tab` abría siempre una ventana nueva, nunca una pestaña.** Invocar
+  `wt.exe new-tab` desde fuera de una sesión de Windows Terminal (que es
+  justo el caso normal, ya que el orquestador no corre dentro de WT) crea
+  siempre una ventana separada si no se le dice lo contrario — confirmado en
+  vivo con el usuario: tres filas, tres ventanas, ninguna como pestaña.
+  Añadido `-w 0` a los argumentos de `wt.exe` (reutiliza la última ventana
+  activa si hay alguna; si no hay ninguna, crea la primera igual que antes).
+  Reverificado en vivo: dos filas en paralelo (Kimi y Codex, modelos
+  distintos) aparecen como dos pestañas dentro de la misma ventana.
+
 ## 0.2.2 — 2026-10-04
 
 ### Corregido

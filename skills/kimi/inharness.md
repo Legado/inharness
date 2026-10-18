@@ -192,6 +192,64 @@ nada.
   ```
   Nunca `--bare`.
 
+**Visibilidad en vivo (Windows Terminal): las invocaciones de Codex y Claude
+de arriba NO se lanzan crudas por shell, sino a traves de
+`src/paneLauncher.js` del paquete inharness**, que abre el proceso en un
+split-pane (si ya estas dentro de Windows Terminal) o en una pestaña nueva
+(si hay `wt.exe` disponible), o cae a la ejecucion invisible de siempre si
+no hay Windows Terminal. **El usuario no invoca nada: la apertura del
+pane/tab es un efecto automatico de ese codigo, no un paso nuevo.**
+
+Lanza cada fila asi (Bash con `run_in_background: true`, el mismo mecanismo
+de paralelismo que ya usas; el log queda en la ruta de auditoria habitual
+`.inharness/log/<id>-<cli>.log`):
+
+```bash
+# una vez por sesion: localizar el modulo que viene con inharness
+# (npm i -g; si se usa npx o el repo clonado, apunta al src/ del paquete)
+export PL="$(npm root -g)/inharness/src/paneLauncher.js"
+
+# Codex - el prompt largo va por input (equivale al heredoc de arriba)
+PL="$PL" node -e '
+  const r = require(process.env.PL).launchInPane({
+    command: "codex.cmd",
+    args: ["exec","-m","<modelo>","-c","model_reasoning_effort=<esfuerzo>",
+           "--sandbox","workspace-write","--skip-git-repo-check",
+           "-C","<directorio de trabajo>","-"],
+    cwd: "<directorio de trabajo>",
+    input: "<prompt completo>",
+    logFile: ".inharness/log/<id>-codex.log",
+    title: "inharness <id> codex"
+  });
+  console.log(JSON.stringify(r));   // {"mode":"pane|tab|fallback","pid":...}
+'
+
+# Claude
+PL="$PL" node -e '
+  const r = require(process.env.PL).launchInPane({
+    command: "claude",
+    args: ["-p","<prompt>","--model","<haiku|sonnet|opus>",
+           "--permission-mode","acceptEdits",
+           "--add-dir","<directorio de trabajo>"],
+    cwd: "<directorio de trabajo>",
+    logFile: ".inharness/log/<id>-claude.log",
+    title: "inharness <id> claude"
+  });
+  console.log(JSON.stringify(r));
+'
+```
+
+Cuando otra fila dependa de esta, espera su resultado con:
+
+```bash
+PL="$PL" node -e '
+  require(process.env.PL).waitForCompletion(".inharness/log/<id>-<cli>.log").then(r => {
+    console.log(JSON.stringify({ ok: r.ok, exitCode: r.exitCode, timedOut: r.timedOut }));
+    process.exit(r.ok ? 0 : 1);
+  });
+'
+```
+
 Verifica cada fila antes de dar la siguiente por buena si depende de ella.
 Actualiza `.inharness/assignment.md` inmediatamente tras cada fila.
 
