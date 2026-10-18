@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.3.2 — 2026-10-18
+
+### Añadido
+- **Guardarraíl técnico contra invocación cruda de Codex/Kimi (no una regla
+  de prompt).** Una skill puede decir "usa paneLauncher" todo lo que quiera
+  — un orquestador LLM puede simplemente no seguirlo (pasó en esta misma
+  sesión de desarrollo). Nuevo `src/installGuardrails.js`, llamado desde
+  `bin/inharness.js` en cada arranque (idempotente): instala un hook
+  `PreToolUse` real en `~/.claude/settings.json` (Claude Code) y en
+  `~/.codex/hooks.json` (Codex, matcher `^Bash$`) que bloquea la llamada
+  Bash cruda si hay una fila activa en `.inharness/assignment.md`. Ambos
+  verificados en vivo contra el runtime real (Claude: bloqueo inmediato sin
+  reinicio; Codex: 8 aserciones contra su app-server real, ver
+  `.inharness/codex-hooks-investigation/REPORT.md` de la auditoría que lo
+  produjo). Lógica de detección compartida en `src/guardLogic.js`
+  (`src/claudeGuardHook.js` y `src/codexPreToolUse.cjs`), para que las dos
+  implementaciones no diverjan.
+  - Codex marca un hook nuevo como *untrusted* hasta que el usuario lo
+    confirma en `/hooks` — puerta de seguridad propia de Codex, no evitable.
+  - Kimi Code no tiene mecanismo de hooks hoy: sin guardarraíl técnico ahí,
+    solo la regla de prompt en su skill.
+- **Catálogo persistente de CLIs/modelos.** Nuevo `src/catalogCache.js`
+  (`writeCatalog`/`readCatalog`). `bin/inharness.js` escribe el resultado de
+  cada descubrimiento en `~/.inharness/catalog.json` (global, no por
+  proyecto) como punto de arranque rápido para las skills. Falla en
+  silencio (solo `console.warn`) si no se puede escribir.
+
 ## 0.3.1 — 2026-10-18
 
 ### Cambiado

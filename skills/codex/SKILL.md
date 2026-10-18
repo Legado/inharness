@@ -205,7 +205,13 @@ de arriba NO se lanzan crudas por shell, sino a traves de
 split-pane (si ya estas dentro de Windows Terminal) o en una pestaña nueva
 (si hay `wt.exe` disponible), o cae a la ejecucion invisible de siempre si
 no hay Windows Terminal. **El usuario no invoca nada: la apertura del
-pane/tab es un efecto automatico de ese codigo, no un paso nuevo.**
+pane/tab es un efecto automatico de ese codigo, no un paso nuevo.** Esto no
+depende de que te acuerdes de seguir esta instruccion: un hook `PreToolUse`
+real (`~/.codex/hooks.json`, matcher `^Bash$`, instalado por `inharness`)
+bloquea una invocacion cruda de Claude/Kimi por shell mientras haya una fila
+activa en `.inharness/assignment.md` - si lo olvidas, la llamada falla con
+un mensaje explicito en vez de ejecutarse invisible. Nota: un hook nuevo
+queda *untrusted* hasta que lo confirmas una vez en `/hooks`.
 
 Lanza cada fila asi (Bash con `run_in_background: true`, el mismo mecanismo
 de paralelismo que ya usas; el log queda en la ruta de auditoria habitual

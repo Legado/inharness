@@ -1,0 +1,76 @@
+'use strict';
+
+/**
+ * Logica compartida entre los guards de Claude Code (src/claudeGuardHook.js)
+ * y Codex (src/codexPreToolUse.cjs). Un solo sitio para decidir "es una
+ * invocacion cruda prohibida" y "hay una delegacion activa" evita que las
+ * dos implementaciones diverjan con el tiempo.
+ *
+ * Verificado empiricamente contra Codex 0.160.0 real (ver
+ * .inharness/codex-hooks-investigation/REPORT.md de la auditoria): el
+ * parser de "fila activa" por columna de tabla (en vez de buscar palabras
+ * sueltas como "en curso") sobrevive a reordenar columnas y a estados en
+ * texto libre ("parcial", "hecho, commit ..."), y es el que de verdad se
+ * probo contra el hook real.
+ */
+
+const fs = require('node:fs');
+const path = require('node:path');
+
+/** true si el comando es una invocacion cruda de Codex o Kimi (sin pasar por paneLauncher). */
+function isRawInvocation(command) {
+  if (typeof command !== 'string') return false;
+  if (/paneLauncher/i.test(command)) return false;
+  const codexRaw = command.includes('codex.cmd exec') || command.includes('codex exec');
+  const kimiRaw = /\bkimi\b(?:[^\r\n]*?[ \t])?-p(?=[ \t"']|$)/.test(command);
+  return codexRaw || kimiRaw;
+}
+
+/**
+ * true si el markdown de assignment.md tiene alguna fila cuyo estado no
+ * sea terminal ("hecho"/"fallido" al inicio, admite sufijos como "hecho,
+ * commit 5066029"). Busca la columna "estado" por cabecera, no por
+ * posicion fija - sobrevive a que la tabla cambie de orden de columnas.
+ * Ignora filas de separador (---|---) y resetea la columna detectada al
+ * salir de un bloque de tabla (soporta varias tablas en el mismo fichero).
+ */
+function hasActiveRows(markdown) {
+  let statusColumn = -1;
+  for (const line of markdown.split(/\r?\n/)) {
+    if (!line.trim().startsWith('|')) {
+      statusColumn = -1;
+      continue;
+    }
+    const cells = line
+      .trim()
+      .replace(/^\|/, '')
+      .replace(/\|$/, '')
+      .split('|')
+      .map((cell) => cell.trim());
+    const headerColumn = cells.findIndex((cell) => cell.toLowerCase() === 'estado');
+    if (headerColumn !== -1) {
+      statusColumn = headerColumn;
+      continue;
+    }
+    if (statusColumn === -1 || cells.every((cell) => /^:?-+:?$/.test(cell))) continue;
+    const status = cells[statusColumn] || '';
+    if (!/^(?:hecho|fallido)\b/i.test(status)) return true;
+  }
+  return false;
+}
+
+/** true si cwd tiene un .inharness/assignment.md con alguna fila activa. */
+function hasActiveDelegation(cwd) {
+  if (typeof cwd !== 'string' || !path.isAbsolute(cwd)) return false;
+  const assignmentPath = path.join(cwd, '.inharness', 'assignment.md');
+  let markdown;
+  try {
+    markdown = fs.readFileSync(assignmentPath, 'utf8');
+  } catch (err) {
+    if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return false;
+    throw err;
+  }
+  return hasActiveRows(markdown);
+}
+
+module.exports = { isRawInvocation, hasActiveRows, hasActiveDelegation };

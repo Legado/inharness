@@ -2,7 +2,7 @@
 
 **Reparte una tarea entre Claude, Codex y Kimi usando las suscripciones que ya pagas. Sin API keys. Sin facturar por token. Sin salir del CLI donde ya trabajas.**
 
-> Versión 0.3.1. Antes de publicarla se sometió a un stress test: orquestación
+> Versión 0.3.2. Antes de publicarla se sometió a un stress test: orquestación
 > de desarrollos reales con decenas de tareas en paralelo entre los tres CLIs.
 > Lo que falló durante esas pruebas está documentado más abajo, junto con cómo
 > se resolvió. Si encuentras un borde que no está cubierto, abre un issue.
@@ -218,6 +218,11 @@ src/handoff.js         traspasa el control real del terminal al CLI elegido
 src/syncSkills.js      instala/actualiza las skills nativas en cada CLI
 src/spawnCli.js        invocación robusta entre plataformas (incl. .cmd de Windows)
 src/paneLauncher.js    lanza las filas delegadas con visibilidad en vivo (pane/tab)
+src/guardLogic.js      detecta invocación cruda + delegación activa (compartido)
+src/claudeGuardHook.js guardarraíl PreToolUse para Claude Code
+src/codexPreToolUse.cjs guardarraíl PreToolUse para Codex
+src/installGuardrails.js instala/actualiza los dos guardarraíles de forma idempotente
+src/catalogCache.js    persiste el catálogo de CLIs/modelos en ~/.inharness/catalog.json
 skills/claude/         SKILL.md para Claude Code
 skills/codex/          SKILL.md + agents/openai.yaml para Codex
 skills/kimi/           agente markdown para Kimi Code
@@ -239,7 +244,31 @@ bloquea al orquestador; su salida combinada se vuelca al log habitual
 (`.inharness/log/<id>-<cli>.log`) cerrando con una línea sentinel
 (`###INHARNESS_EXIT:<código>###`), que `waitForCompletion` sondea para saber
 cuándo terminó la fila y con qué código. El usuario no invoca nada: abrir el
-pane/tab es un efecto automático del propio código.
+pane/tab es un efecto automático del propio código. En modo pane/tab, el
+`input` (el prompt de la fila) viaja por un fichero temporal, no por el
+stdin de `wt.exe` (que no lo reenvía al pane que crea); en modo tab,
+`wt.exe` se invoca con `-w 0` para reutilizar la última ventana activa en
+vez de abrir una nueva por cada fila.
+
+**Guardarraíl técnico, no solo una regla de prompt.** Que una skill "deba"
+pasar por `paneLauncher` en vez de invocar Codex/Kimi crudo es una
+instrucción de prompt — y un orquestador puede no seguirla (nos pasó
+construyendo esto). Por eso `inharness` instala, en cada arranque y de
+forma idempotente, un hook `PreToolUse` real:
+- **Claude Code** (`~/.claude/settings.json`): bloquea la llamada Bash antes
+  de ejecutarla si coincide con una invocación cruda y hay una fila activa
+  en `.inharness/assignment.md`. Verificado en vivo: bloquea sin reinicio.
+- **Codex** (`~/.codex/hooks.json`): mismo mecanismo, matcher `^Bash$`
+  (verificado empíricamente contra el app-server real). Un hook nuevo queda
+  *untrusted* hasta que lo confirmas una vez en `/hooks` dentro de una
+  sesión de Codex — es una puerta de seguridad deliberada de Codex, no algo
+  que `inharness` pueda o deba saltarse.
+- **Kimi Code**: no tiene mecanismo de hooks hoy. No hay guardarraíl técnico
+  posible ahí todavía — solo la regla de prompt en su skill.
+
+**Catálogo persistente.** Cada arranque de `inharness` también escribe el
+descubrimiento de CLIs/modelos en `~/.inharness/catalog.json` (global, no
+por proyecto), como punto de arranque rápido para las skills.
 
 ## Contribuir
 

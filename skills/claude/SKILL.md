@@ -254,7 +254,12 @@ de arriba NO se lanzan crudas por Bash, sino a través de
 split-pane (si ya estás dentro de Windows Terminal) o en una pestaña nueva
 (si hay `wt.exe` disponible), o cae a la ejecución invisible de siempre si
 no hay Windows Terminal. **El usuario no invoca nada: la apertura del
-pane/tab es un efecto automático de ese código, no un paso nuevo.**
+pane/tab es un efecto automático de ese código, no un paso nuevo.** Esto no
+depende de que te acuerdes de seguir esta instrucción: un hook `PreToolUse`
+real (instalado por `inharness` en `~/.claude/settings.json`) bloquea una
+invocación cruda de Codex/Kimi por Bash mientras haya una fila activa en
+`.inharness/assignment.md`, así que si lo olvidas, la llamada falla con un
+mensaje explícito en vez de ejecutarse invisible.
 
 Lanza cada fila así (Bash con `run_in_background: true`, el mismo mecanismo
 de paralelismo que ya usas; el log queda en la ruta de auditoría habitual

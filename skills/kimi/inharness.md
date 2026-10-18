@@ -210,7 +210,10 @@ de arriba NO se lanzan crudas por shell, sino a traves de
 split-pane (si ya estas dentro de Windows Terminal) o en una pestaña nueva
 (si hay `wt.exe` disponible), o cae a la ejecucion invisible de siempre si
 no hay Windows Terminal. **El usuario no invoca nada: la apertura del
-pane/tab es un efecto automatico de ese codigo, no un paso nuevo.**
+pane/tab es un efecto automatico de ese codigo, no un paso nuevo.** Nota:
+Kimi Code no tiene mecanismo de hooks hoy, asi que aqui esto sigue siendo
+solo una instruccion de esta skill - en Claude y Codex, ademas, un hook real
+bloquea la invocacion cruda aunque la olvides.
 
 Lanza cada fila asi (Bash con `run_in_background: true`, el mismo mecanismo
 de paralelismo que ya usas; el log queda en la ruta de auditoria habitual

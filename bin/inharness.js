@@ -2,9 +2,11 @@
 'use strict';
 
 const { discoverAll } = require('../src/discovery');
+const { writeCatalog } = require('../src/catalogCache');
 const { renderDiscovery, chooseFromList, closeRl } = require('../src/ui');
 const { handoff } = require('../src/handoff');
 const { syncSkills } = require('../src/syncSkills');
+const { installGuardrails } = require('../src/installGuardrails');
 
 async function main() {
   console.log('inharness — elige orquestador, luego trabajas ahi normal');
@@ -14,7 +16,16 @@ async function main() {
   // "setup" que el usuario tenga que recordar.
   syncSkills();
 
+  // Guardarraíl técnico (no solo una regla de prompt): bloquea invocar
+  // Codex/Kimi crudo por Bash mientras hay una fila activa de inharness.
+  // Idempotente; en Codex deja el hook "untrusted" hasta que el usuario lo
+  // confirme en /hooks (ver mensaje que imprime installGuardrails).
+  installGuardrails();
+
   const discovered = discoverAll();
+  // Refresco en caliente del catalogo global: las skills lo leen como punto
+  // de arranque rapido. Falla silencioso (warn), nunca tumba el arranque.
+  writeCatalog(discovered);
   renderDiscovery(discovered);
 
   const available = discovered.filter((d) => d.installed && d.subscriptionOk);
