@@ -1,3 +1,10 @@
 node_modules/
 *.log
 .DS_Store
+
+# Estado de trabajo local de inharness (prompts, logs, reparto): nunca se versiona
+.inharness/
+
+# Ruido de otras herramientas de skills que instalan en este directorio
+.agents/
+skills-lock.json

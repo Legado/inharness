@@ -3,12 +3,12 @@ name: "inharness"
 description: "Orquesta una tarea entre Codex (tu mismo), Claude y Kimi por suscripcion (sin API keys), repartiendo por complejidad/coste y ejecutando con aprobacion del usuario. Usar cuando el usuario pida trabajo multiagente, reparte esto entre modelos, mencione $inharness, o pida usar Claude/Kimi/Codex juntos para una tarea."
 ---
 
-# inharness — orquestacion multi-CLI por suscripcion (desde Codex)
+# inharness - orquestacion multi-CLI por suscripcion (desde Codex)
 
 **Cada vez que se active esta skill** (por `$inharness`, o porque la tarea
 pide trabajo multiagente), tu primera linea de respuesta -antes de
 descubrimiento, antes de nada- es una confirmacion explicita: "inharness
-activo - orquestando entre Codex, Claude y Kimi." Es la unica señal fiable
+activo - orquestando entre Codex, Claude y Kimi." Es la unica senal fiable
 que tiene el usuario de que esto se disparo y no es una respuesta normal;
 no la omitas nunca, ni siquiera si ya la diste antes en la misma sesion
 (cada activacion se anuncia).
@@ -107,7 +107,7 @@ claude --version
 
 Verificacion de suscripcion (nunca API): Kimi debe mostrar `source=oauth`
 en `provider list`; Claude, si el entorno tiene `ANTHROPIC_API_KEY` seteada
-puede estar en modo API - avisa y exclúyela si es asi. Tu (Codex) ya estas
+puede estar en modo API - avisa y excluyela si es asi. Tu (Codex) ya estas
 autenticado por esta sesion.
 
 **Aviso de version**: si `kimi --version` o `claude --version` difieren de
@@ -134,7 +134,7 @@ nombre - mira los metadatos reales del catalogo (effort por defecto,
 contexto). Muestralo en 3-4 lineas, nunca en parrafos.
 
 Para cada nivel, anota tambien un **respaldo** en otro CLI (p. ej.
-`media: kimi/kimi-for-coding · respaldo: claude/sonnet`). Las suscripciones
+`media: kimi/kimi-for-coding - respaldo: claude/sonnet`). Las suscripciones
 tienen cupos (ventanas de 5 horas, limites semanales) y se agotan a mitad
 de trabajo: el respaldo decidido de antemano evita improvisar cuando pase
 (ver "Fila cortada por cupo" en el Paso 3).
@@ -177,93 +177,85 @@ mapeo) antes de ejecutar nada.
 
 ## Paso 3 - Ejecutar (solo lo aprobado)
 
-- **Fila resuelta a Codex (tu mismo)**: hazla directamente con tus propias
-  herramientas, no te invoques a ti mismo como subproceso. Si tu sesion
-  corre en el sandbox `workspace-write` **no tienes red**: no puedes
-  instalar dependencias (`pip`, `npm`), descargar nada ni probar contra
-  servicios o webs en vivo. Las filas que lo necesiten asignalas a Claude o
-  a Kimi, o pide al usuario que ejecute ese paso.
-- **Fila resuelta a Claude**:
-  ```bash
-  claude -p "<prompt completo y autocontenido>" \
-    --model <haiku|sonnet|opus> \
-    --permission-mode acceptEdits \
-    --add-dir "<directorio de trabajo>"
-  ```
-  Nunca `--bare` (fuerza API key en vez de suscripcion).
-- **Fila resuelta a Kimi**:
-  ```bash
-  kimi -m kimi-code/<modelo> -p "<prompt>"
-  ```
-  Alias completo obligatorio. Nunca `--auto` ni `-y` en modo `-p`. Kimi no
-  permite fijar el nivel de esfuerzo por invocacion - usa el que traiga el
-  modelo por defecto.
+**Filas de codex (tu mismo):** resuelvelas con tus herramientas en esta
+sesion; no te invoques como subproceso.
 
-**Visibilidad en vivo (Windows Terminal): las invocaciones de Claude y Kimi
-de arriba NO se lanzan crudas por shell, sino a traves de
-`src/paneLauncher.js` del paquete inharness**, que abre el proceso en un
-split-pane (si ya estas dentro de Windows Terminal) o en una pestaña nueva
-(si hay `wt.exe` disponible), o cae a la ejecucion invisible de siempre si
-no hay Windows Terminal. **El usuario no invoca nada: la apertura del
-pane/tab es un efecto automatico de ese codigo, no un paso nuevo.** Esto no
-depende de que te acuerdes de seguir esta instruccion: un hook `PreToolUse`
-real (`~/.codex/hooks.json`, matcher `^Bash$`, instalado por `inharness`)
-bloquea una invocacion cruda de Claude/Kimi por shell mientras haya una fila
-activa en `.inharness/assignment.md` - si lo olvidas, la llamada falla con
-un mensaje explicito en vez de ejecutarse invisible. Nota: un hook nuevo
-queda *untrusted* hasta que lo confirmas una vez en `/hooks`.
+**Codex:** el sandbox `workspace-write` no tiene red. No asignes a esa fila
+instalar dependencias ni probar servicios en vivo; prepara tu las
+dependencias y deja esas pruebas a otra fila. Indicalo en el prompt.
+`--effort` admite low|medium|high|xhigh|max|ultra; usa un valor admitido por
+el modelo del catalogo. `--sandbox` admite workspace-write (por defecto)
+o read-only; no se aplica a Kimi ni a Claude.
 
-Lanza cada fila asi (Bash con `run_in_background: true`, el mismo mecanismo
-de paralelismo que ya usas; el log queda en la ruta de auditoria habitual
-`.inharness/log/<id>-<cli>.log`):
+**Kimi:** el prefijo `kimi-code/` se anade automaticamente. Nunca `--auto`
+ni `-y` en modo `-p`. Usa el esfuerzo predeterminado del modelo.
 
-```bash
-# una vez por sesion: localizar el modulo que viene con inharness
-# (npm i -g; si se usa npx o el repo clonado, apunta al src/ del paquete)
-export PL="$(npm root -g)/inharness/src/paneLauncher.js"
+**Claude externo:** recibe el prompt por stdin, con `--model`,
+`--permission-mode acceptEdits` y `--add-dir`; nunca `--bare`.
+`acceptEdits` permite editar archivos, pero no autoriza Bash en general:
+una herramienta sin permiso puede ser denegada o requerir aprobacion y
+agotar el timeout. Revisa `wait` y el log; prepara permisos concretos en
+una sesion interactiva o reasigna la fila. No actives bypass de permisos.
 
-# Claude
-PL="$PL" node -e '
-  const r = require(process.env.PL).launchInPane({
-    command: "claude",
-    args: ["-p","<prompt completo y autocontenido>",
-           "--model","<haiku|sonnet|opus>",
-           "--permission-mode","acceptEdits",
-           "--add-dir","<directorio de trabajo>"],
-    cwd: "<directorio de trabajo>",
-    logFile: ".inharness/log/<id>-claude.log",
-    title: "inharness <id> claude"
-  });
-  console.log(JSON.stringify(r));   // {"mode":"pane|tab|fallback","pid":...}
-'
+**Visibilidad en vivo (Windows Terminal):** lanza las filas externas con
+`runRow.js`, que `inharness` instala en `~/.inharness/runtime/` en cada
+arranque. Abre pane/tab si hay Windows Terminal; en fallback ejecuta sin
+ventana. El usuario no tiene que abrir nada. Con pane/tab `launch` vuelve
+al instante; en fallback bloquea hasta terminar. Para filas independientes
+usa el segundo plano de tu herramienta cuando el fallback pueda bloquear
+(en Claude, `Bash` con `run_in_background: true`). Espera las dependencias.
 
-# Kimi
-PL="$PL" node -e '
-  const r = require(process.env.PL).launchInPane({
-    command: "kimi",
-    args: ["-m","kimi-code/<modelo>","-p","<prompt>"],
-    cwd: "<directorio de trabajo>",
-    logFile: ".inharness/log/<id>-kimi.log",
-    title: "inharness <id> kimi"
-  });
-  console.log(JSON.stringify(r));
-'
-```
+**Guardarrail tecnico:** bloquea llamadas crudas a Codex/Kimi mientras
+haya filas activas. Salida de emergencia: `INHARNESS_ALLOW_RAW=1`.
+La delegacion caduca a las 12 h; la variable no caduca: retirala al terminar.
+Bash: `INHARNESS_ALLOW_RAW=1 comando`; PowerShell: establece
+`$env:INHARNESS_ALLOW_RAW="1"` y retirala despues con
+`Remove-Item Env:INHARNESS_ALLOW_RAW`. Kimi no tiene hooks.
+El hook de Codex se instala en `~/.codex/hooks.json`; acepta su confianza
+una vez en `/hooks` si aparece como untrusted.
 
-Cuando otra fila dependa de esta, espera su resultado con:
+Escribe el prompt autocontenido con el editor en
+`.inharness/prompts/<id>.md`. Los ejemplos siguientes usan la fila 3:
+crea primero `.inharness/prompts/3.md` y adapta id, CLI, modelo y esfuerzo
+al reparto aprobado. Son el mismo texto en bash, Git Bash y PowerShell.
+`--cwd` fija la raiz explicita; el prompt debe estar dentro de ella,
+tambien tras resolver enlaces: fichero regular UTF-8, sin controles
+binarios, de hasta 1 MiB. Los logs y su estado no admiten enlaces.
 
 ```bash
-PL="$PL" node -e '
-  require(process.env.PL).waitForCompletion(".inharness/log/<id>-<cli>.log").then(r => {
-    console.log(JSON.stringify({ ok: r.ok, exitCode: r.exitCode, timedOut: r.timedOut }));
-    process.exit(r.ok ? 0 : 1);
-  });
-'
+# kimi
+node "$HOME/.inharness/runtime/runRow.js" launch --id 3 --cli kimi --model kimi-for-coding --prompt-file .inharness/prompts/3.md
+
+# claude
+node "$HOME/.inharness/runtime/runRow.js" launch --id 3 --cli claude --model sonnet --prompt-file .inharness/prompts/3.md
 ```
 
-Verifica cada fila (leer el resultado, correr tests si aplica) antes de dar
-la siguiente por buena si depende de ella. Actualiza
-`.inharness/assignment.md` inmediatamente tras cada fila.
+Codex y Claude reciben el prompt por stdin. Kimi lo recibe como argumento
+hasta 20000 caracteres, siempre que la linea completa escapada quepa en
+CreateProcess (32767 unidades UTF-16 con el NUL final). Si no cabe, recibe
+una instruccion con la ruta relativa citada en JSON para leer el fichero.
+No se ha vuelto a verificar aqui el soporte de stdin de Kimi.
+Codex anade `--output-last-message .inharness/log/<id>-codex-last.txt`.
+
+`launch` imprime una linea JSON con id, cli, mode, pid y log; mode es pane,
+tab o fallback. El log esta en `.inharness/log/<id>-<cli>.log`.
+Cuando otra fila dependa de esta, usa `wait`: devuelve 0 si ok, 1 si fallo,
+y JSON con exitCode, aborted, timedOut, error y outputTail (4000 caracteres).
+`status` no bloquea: running | done | aborted | unknown. Errores de uso,
+incluido un id ya ocupado (EBUSY), devuelven 2.
+Limitacion pendiente del launcher: en fallback no hay reserva de id;
+no lances dos filas con el mismo id/CLI a la vez, pues pueden pisar el log.
+
+```bash
+node "$HOME/.inharness/runtime/runRow.js" wait --id 3 --cli kimi --timeout-ms 600000
+node "$HOME/.inharness/runtime/runRow.js" status --id 3 --cli kimi
+node "$HOME/.inharness/runtime/runRow.js" wait --id 3 --cli claude --timeout-ms 600000
+node "$HOME/.inharness/runtime/runRow.js" status --id 3 --cli claude
+```
+
+Verifica cada fila antes de darla por buena: lee los archivos y ejecuta
+los tests si produce codigo. Actualiza su estado en
+`.inharness/assignment.md` inmediatamente despues de cada fila.
 
 **Fila cortada por cupo.** Si un CLI responde con un limite de uso ("usage
 limit", "quota", "rate limit", un 403/429 que hable de cupo o de la ventana
@@ -280,6 +272,6 @@ de 5 horas) o se queda sin responder dentro de su tiempo maximo:
 ## Paso 4 - QA final y cierre
 
 Revisa el conjunto contra lo pedido, reporta que hizo cada fila (rol -
-cli/modelo - resultado) en una lista corta, y señala cualquier fallo o
+cli/modelo - resultado) en una lista corta, y senala cualquier fallo o
 modelo excluido (401, version no verificada) en vez de omitirlo. Deja
 `.inharness/assignment.md` con el estado final real.

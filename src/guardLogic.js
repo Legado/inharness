@@ -17,13 +17,45 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-/** true si el comando es una invocacion cruda de Codex o Kimi (sin pasar por paneLauncher). */
+const BLOCK_MESSAGE = 'inharness: hay una delegacion activa; usa node ~/.inharness/runtime/runRow.js launch --id <id> --cli <codex|kimi> ... (ver las skills). Salida de emergencia: INHARNESS_ALLOW_RAW=1. La delegacion caduca a las 12 h.';
+
+function segments(command) {
+  const result = [];
+  let segment = '';
+  let quote = null;
+  for (let i = 0; i < command.length; i++) {
+    const char = command[i];
+    if (char === quote) { quote = null; segment += char; continue; }
+    if (!quote && (char === '"' || char === "'")) { quote = char; segment += char; continue; }
+    if ((!quote || quote === '"') && command.slice(i, i + 2) === '$(') {
+      result.push(segment); segment = ''; i++; continue;
+    }
+    if (!quote && /[;&|\r\n`()]/.test(char)) {
+      result.push(segment); segment = ''; continue;
+    }
+    segment += char;
+  }
+  result.push(segment);
+  return result;
+}
+
+function tokens(segment) {
+  return segment.match(/"[^"]*"|'[^']*'|[^\s]+/g) || [];
+}
+
+/** true si el primer ejecutable de algun segmento invoca Codex o Kimi crudo. */
 function isRawInvocation(command) {
   if (typeof command !== 'string') return false;
-  if (/paneLauncher/i.test(command)) return false;
-  const codexRaw = command.includes('codex.cmd exec') || command.includes('codex exec');
-  const kimiRaw = /\bkimi\b(?:[^\r\n]*?[ \t])?-p(?=[ \t"']|$)/.test(command);
-  return codexRaw || kimiRaw;
+  if (/paneLauncher|runRow/i.test(command) || command.includes('INHARNESS_ALLOW_RAW=1')) return false;
+  for (const segment of segments(command)) {
+    const words = tokens(segment.trim());
+    while (words.length && (/^[A-Za-z_][A-Za-z_0-9]*=/.test(words[0]) || words[0] === 'env')) words.shift();
+    if (!words.length) continue;
+    const executable = words.shift().replace(/^["']|["']$/g, '').replace(/\\/g, '/').split('/').pop().replace(/\.(?:cmd|exe)$/i, '').toLowerCase();
+    if (executable === 'codex' && /^(?:exec|e)$/.test(words[0] || '')) return true;
+    if (executable === 'kimi' && words.some((word) => /^(?:-p|--prompt)(?:=.*)?$/.test(word))) return true;
+  }
+  return false;
 }
 
 /**
@@ -59,12 +91,15 @@ function hasActiveRows(markdown) {
   return false;
 }
 
-/** true si cwd tiene un .inharness/assignment.md con alguna fila activa. */
-function hasActiveDelegation(cwd) {
+/** true si cwd tiene un assignment reciente con alguna fila activa. */
+function hasActiveDelegation(cwd, { now = Date.now(), staleMs } = {}) {
   if (typeof cwd !== 'string' || !path.isAbsolute(cwd)) return false;
   const assignmentPath = path.join(cwd, '.inharness', 'assignment.md');
   let markdown;
   try {
+    const hours = Number(process.env.INHARNESS_STALE_HOURS);
+    const lifetime = staleMs === undefined ? (Number.isFinite(hours) && hours > 0 ? hours : 12) * 60 * 60 * 1000 : staleMs;
+    if (now - fs.statSync(assignmentPath).mtimeMs > lifetime) return false;
     markdown = fs.readFileSync(assignmentPath, 'utf8');
   } catch (err) {
     if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return false;
@@ -73,4 +108,4 @@ function hasActiveDelegation(cwd) {
   return hasActiveRows(markdown);
 }
 
-module.exports = { isRawInvocation, hasActiveRows, hasActiveDelegation };
+module.exports = { isRawInvocation, hasActiveRows, hasActiveDelegation, BLOCK_MESSAGE };

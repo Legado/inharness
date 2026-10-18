@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.4.0 — 2026-10-18
+
+Revisión thermo-nuclear de todo el proyecto. **Cambios incompatibles:** el log ya
+no termina en `###INHARNESS_EXIT###` (el resultado va en `<log>.exit`) y las
+skills usan `runRow.js` en lugar de recetas de shell.
+
+### Seguridad
+- Cierra la inyección por cmd.exe (`; & % "`, saltos de línea, límite 8191): los
+  shims npm se ejecutan como node directo; el resto de `.cmd` con escape y fallo cerrado.
+- `resolveExecutable` ya no busca en el cwd (binario plantado).
+- Parámetros de `wt.exe` por fichero temporal 0600 de un solo uso; `logFile`
+  confinado a `cwd` (sin junctions/symlinks hacia fuera); ids validados.
+- Rutas de hooks escapadas para HOME con `$` o comillas; escrituras atómicas con
+  backup `settings.json.bak-inharness`.
+
+### Fiabilidad
+- Resultado fuera de banda (`.exit`, `.pid`); `EBUSY` si el log tiene ejecución
+  viva (también en fallback concurrente); timeouts, kill de árbol y salida grande íntegra.
+- Runtime estable en `~/.inharness/runtime`; hooks migrados desde rutas antiguas;
+  arranque tolerante a fallos (`safeStartup`); hooks caducan a las 12 h y fallan abiertos.
+- `handoff` reescrito sobre `buildSpawn`.
+
+### Añadido
+- `src/runRow.js` (`launch|wait|status`) y skills de Claude/Codex/Kimi reescritas.
+- `npm test` (75 tests); `.gitignore`; autoignore de `.inharness/`.
+- Variables: `INHARNESS_FORCE_FALLBACK`, `INHARNESS_ALLOW_RAW`, `INHARNESS_NO_GUARDRAILS`,
+  `INHARNESS_STALE_HOURS`.
+
+### Limitaciones conocidas
+- Hook de Codex *untrusted* hasta confirmarlo en `/hooks`; Kimi sin hooks.
+- Solo verificado en Windows; Linux/macOS usan fallback.
+- `claude.cmd` va por cmd.exe (rechaza `%` y saltos de línea).
+
 ## 0.3.2 — 2026-10-18
 
 ### Añadido

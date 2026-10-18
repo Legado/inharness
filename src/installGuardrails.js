@@ -3,133 +3,108 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-
-/**
- * Instala, de forma idempotente, los guardarraíles técnicos que impiden
- * invocar Codex/Kimi crudo por Bash mientras hay una delegación activa de
- * inharness (ver Paso 3 de las skills). Esto NO es una instrucción de
- * prompt que un orquestador pueda olvidar seguir — es un hook real que
- * bloquea la llamada antes de que se ejecute.
- *
- * - Claude Code: hook PreToolUse en ~/.claude/settings.json (verificado en
- *   vivo: bloquea de inmediato, sin reinicio).
- * - Codex: hook PreToolUse en ~/.codex/hooks.json, verificado empíricamente
- *   contra el app-server real (ver .inharness/codex-hooks-investigation/).
- *   OJO: un hook nuevo queda "untrusted" la primera vez — Codex no lo
- *   ejecuta hasta que el usuario lo confirma en `/hooks` dentro de una
- *   sesión de Codex. Esto no se puede automatizar (es una puerta de
- *   seguridad deliberada de Codex), así que esta función deja el hook
- *   instalado pero avisa de ese paso pendiente.
- * - Kimi Code: no tiene mecanismo de hooks hoy. No hay guardarraíl técnico
- *   posible para Kimi todavía — solo queda la regla de prompt en su skill.
- *
- * Nunca sobreescribe hooks ajenos: lee, comprueba si el guard de inharness
- * ya está presente (por una marca en el propio comando), y si no lo está,
- * lo añade preservando el resto. En Codex, hace un backup de una sola vez
- * (`hooks.json.bak-inharness`) antes de la primera escritura.
- */
+const crypto = require('node:crypto');
+const { runtimeDir } = require('./installRuntime');
 
 const CLAUDE_GUARD_MARKER = 'claudeGuardHook.js';
 const CODEX_GUARD_MARKER = 'codexPreToolUse.cjs';
 
-function repoRoot() {
-  return path.join(__dirname, '..');
-}
+// Las rutas van entre comillas dobles: sin escapar, un $ o ` del HOME se expandiria en sh/PowerShell.
+const shQuote = (value) => `"${value.replace(/[$`"\\]/g, '\\$&')}"`;
+const psQuote = (value) => `"${value.replace(/[$`"\u201C\u201D\u201E]/g, '`$&')}"`;
 
-function readJsonSafe(filePath) {
+function readConfig(file) {
   try {
-    return { ok: true, data: JSON.parse(fs.readFileSync(filePath, 'utf8')) };
+    const data = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('JSON debe ser un objeto');
+    return { data, exists: true };
   } catch (err) {
-    if (err.code === 'ENOENT') return { ok: true, data: null };
-    return { ok: false, error: err };
+    if (err.code === 'ENOENT') return { data: {}, exists: false };
+    console.warn(`inharness: no se pudo leer ${file} (${err.message})`);
+    return null;
   }
 }
 
-function hasGuard(preToolUseGroups, matcher, marker) {
-  return (preToolUseGroups || []).some(
-    (group) =>
-      group.matcher === matcher &&
-      (group.hooks || []).some((h) => h.type === 'command' && h.command && h.command.includes(marker)),
-  );
+function writeAtomic(file, content) {
+  const temporary = `${file}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
+  try {
+    fs.writeFileSync(temporary, content, { flag: 'wx', mode: 0o600 });
+    fs.renameSync(temporary, file);
+  } finally {
+    try { fs.unlinkSync(temporary); } catch (err) { if (err.code !== 'ENOENT') throw err; }
+  }
 }
 
-/** Devuelve true si instaló/actualizó algo, false si ya estaba o no se pudo. */
+function installGuard(file, marker, matcher, desired, create) {
+  const read = readConfig(file);
+  if (!read || (!create && !read.exists)) return false;
+  try {
+    const config = read.data;
+    if (config.hooks !== undefined && (!config.hooks || typeof config.hooks !== 'object' || Array.isArray(config.hooks))) throw new Error('hooks debe ser un objeto');
+    const groups = config.hooks && config.hooks.PreToolUse;
+    if (groups !== undefined && !Array.isArray(groups)) throw new Error('PreToolUse debe ser una lista');
+    let found = false;
+    let changed = false;
+    for (const group of groups || []) {
+      if (!group || group.matcher !== matcher || !Array.isArray(group.hooks)) continue;
+      for (const hook of group.hooks) {
+        if (!hook || hook.type !== 'command' || typeof hook.command !== 'string' || !hook.command.includes(marker)) continue;
+        found = true;
+        for (const key of ['command', 'commandWindows']) {
+          const wanted = key === 'commandWindows' && desired[key] === undefined && hook[key] !== undefined ? desired.command : desired[key];
+          if (wanted !== undefined && hook[key] !== wanted) {
+            hook[key] = wanted;
+            changed = true;
+          }
+        }
+      }
+    }
+    if (!found) {
+      config.hooks = config.hooks || {};
+      config.hooks.PreToolUse = groups || [];
+      config.hooks.PreToolUse.push({ matcher, hooks: [desired] });
+      changed = true;
+    }
+    if (!changed) return false;
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const backup = `${file}.bak-inharness`;
+    if (read.exists) {
+      try { fs.copyFileSync(file, backup, fs.constants.COPYFILE_EXCL); } catch (err) { if (err.code !== 'EEXIST') throw err; }
+    }
+    writeAtomic(file, `${JSON.stringify(config, null, 2)}\n`);
+    return true;
+  } catch (err) {
+    console.warn(`inharness: no se pudo instalar el hook en ${file} (${err.message})`);
+    return false;
+  }
+}
+
 function installClaudeGuard() {
-  const settingsPath = path.join(os.homedir(), '.claude', 'settings.json');
-  const read = readJsonSafe(settingsPath);
-  if (!read.ok) {
-    console.warn(`inharness: no se pudo leer ${settingsPath} (${read.error.message}) - hook de Claude no instalado`);
-    return false;
-  }
-  const settings = read.data || {};
-  settings.hooks = settings.hooks || {};
-  settings.hooks.PreToolUse = settings.hooks.PreToolUse || [];
-  if (hasGuard(settings.hooks.PreToolUse, 'Bash', CLAUDE_GUARD_MARKER)) return false;
-
-  const guardPath = path.join(repoRoot(), 'src', 'claudeGuardHook.js').replace(/\\/g, '/');
-  settings.hooks.PreToolUse.push({
-    matcher: 'Bash',
-    hooks: [{ type: 'command', command: `node "${guardPath}"`, timeout: 5 }],
-  });
-
-  fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
-  fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
-  return true;
+  const guardPath = path.join(runtimeDir(), CLAUDE_GUARD_MARKER).replace(/\\/g, '/');
+  return installGuard(path.join(os.homedir(), '.claude', 'settings.json'), CLAUDE_GUARD_MARKER, 'Bash', {
+    type: 'command', command: `node ${shQuote(guardPath)}`, timeout: 5,
+  }, true);
 }
 
-/** Devuelve true si instaló/actualizó algo, false si ya estaba, no hay Codex, o no se pudo. */
 function installCodexGuard() {
-  const codexDir = path.join(os.homedir(), '.codex');
-  const hooksPath = path.join(codexDir, 'hooks.json');
-  const backupPath = path.join(codexDir, 'hooks.json.bak-inharness');
-
-  const read = readJsonSafe(hooksPath);
-  if (!read.ok) {
-    console.warn(`inharness: no se pudo leer ${hooksPath} (${read.error.message}) - hook de Codex no instalado`);
-    return false;
-  }
-  if (read.data === null) return false; // Codex no usa hooks.json en esta maquina; no forzar su creacion
-
-  const config = read.data;
-  config.hooks = config.hooks || {};
-  config.hooks.PreToolUse = config.hooks.PreToolUse || [];
-  if (hasGuard(config.hooks.PreToolUse, '^Bash$', CODEX_GUARD_MARKER)) return false;
-
-  if (!fs.existsSync(backupPath)) {
-    fs.copyFileSync(hooksPath, backupPath);
-  }
-
-  const guardPathPosix = path.join(repoRoot(), 'src', 'codexPreToolUse.cjs').replace(/\\/g, '/');
-  const guardPathWin = path.join(repoRoot(), 'src', 'codexPreToolUse.cjs');
-  config.hooks.PreToolUse.push({
-    matcher: '^Bash$',
-    hooks: [
-      {
-        type: 'command',
-        command: `node "${guardPathPosix}"`,
-        commandWindows: `& "${process.execPath}" "${guardPathWin}"; exit $LASTEXITCODE`,
-        timeout: 10,
-        statusMessage: 'inharness: comprobar delegacion activa',
-      },
-    ],
-  });
-
-  fs.writeFileSync(hooksPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
-  return true;
+  const guardPath = path.join(runtimeDir(), CODEX_GUARD_MARKER).replace(/\\/g, '/');
+  return installGuard(path.join(os.homedir(), '.codex', 'hooks.json'), CODEX_GUARD_MARKER, '^Bash$', {
+    type: 'command',
+    command: `node ${shQuote(guardPath)}`,
+    commandWindows: `& ${psQuote(process.execPath)} ${psQuote(guardPath)}; exit $LASTEXITCODE`,
+    timeout: 10,
+    statusMessage: 'inharness: comprobar delegacion activa',
+  }, false);
 }
 
 function installGuardrails({ silent = false } = {}) {
+  if (process.env.INHARNESS_NO_GUARDRAILS === '1') return [];
   const installed = [];
   if (installClaudeGuard()) installed.push('claude');
   if (installCodexGuard()) installed.push('codex');
-
-  if (installed.length && !silent) {
-    console.log(`inharness: guardarrailes PreToolUse instalados/actualizados en: ${installed.join(', ')}`);
-    if (installed.includes('codex')) {
-      console.log(
-        'inharness: en Codex, el hook nuevo queda "untrusted" hasta que lo confirmes dentro de una sesion de Codex con /hooks - sin eso no se ejecuta.',
-      );
-    }
+  if (!silent) {
+    for (const name of installed) console.log(`inharness: hook de ${name} instalado/actualizado`);
+    if (installed.includes('codex')) console.log('inharness: confirma el hook de Codex en /hooks; hasta entonces queda untrusted.');
   }
   return installed;
 }

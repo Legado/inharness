@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
+const crypto = require('node:crypto');
 
 // Catalogo global de la maquina (no del proyecto): punto de arranque rapido
 // para las skills, que asi no tienen que redescubrir modelos desde cero en
@@ -13,15 +14,22 @@ function catalogPath() {
 }
 
 function writeCatalog(discovered) {
+  let temporary;
   try {
     const file = catalogPath();
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    const payload = { generatedAt: new Date().toISOString(), clis: discovered };
-    fs.writeFileSync(file, JSON.stringify(payload, null, 2) + '\n', 'utf8');
+    const payload = { schemaVersion: 1, generatedAt: new Date().toISOString(), clis: discovered };
+    temporary = `${file}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
+    fs.writeFileSync(temporary, JSON.stringify(payload, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
+    fs.renameSync(temporary, file);
     return file;
   } catch (err) {
     console.warn(`inharness: no se pudo escribir el catalogo global (${err.message})`);
     return null;
+  } finally {
+    if (temporary) {
+      try { fs.unlinkSync(temporary); } catch (err) { if (err.code !== 'ENOENT') console.warn(`inharness: no se pudo limpiar ${temporary} (${err.message})`); }
+    }
   }
 }
 
@@ -29,7 +37,8 @@ function writeCatalog(discovered) {
 // existe o no se puede parsear.
 function readCatalog() {
   try {
-    return JSON.parse(fs.readFileSync(catalogPath(), 'utf8'));
+    const data = JSON.parse(fs.readFileSync(catalogPath(), 'utf8').replace(/^\uFEFF/, ''));
+    return data && typeof data === 'object' && !Array.isArray(data) && Array.isArray(data.clis) ? data : null;
   } catch {
     return null;
   }

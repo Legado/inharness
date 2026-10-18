@@ -2,7 +2,7 @@
 
 **Reparte una tarea entre Claude, Codex y Kimi usando las suscripciones que ya pagas. Sin API keys. Sin facturar por token. Sin salir del CLI donde ya trabajas.**
 
-> Versión 0.3.2. Antes de publicarla se sometió a un stress test: orquestación
+> Versión 0.4.0. Antes de publicarla se sometió a un stress test: orquestación
 > de desarrollos reales con decenas de tareas en paralelo entre los tres CLIs.
 > Lo que falló durante esas pruebas está documentado más abajo, junto con cómo
 > se resolvió. Si encuentras un borde que no está cubierto, abre un issue.
@@ -216,8 +216,12 @@ bin/inharness.js       lanzador: descubrimiento + elección + traspaso de termin
 src/discovery.js       detección en caliente de CLIs, modelos y suscripción
 src/handoff.js         traspasa el control real del terminal al CLI elegido
 src/syncSkills.js      instala/actualiza las skills nativas en cada CLI
-src/spawnCli.js        invocación robusta entre plataformas (incl. .cmd de Windows)
-src/paneLauncher.js    lanza las filas delegadas con visibilidad en vivo (pane/tab)
+src/resolveExe.js      resuelve ejecutables a ruta absoluta (PATH/PATHEXT, nunca el cwd)
+src/winArgs.js         argumentos seguros en Windows: shims npm directos, cmd.exe con escape y fallo cerrado
+src/spawnCli.js        invocación robusta entre plataformas (sobre resolveExe + winArgs)
+src/paneLauncher.js    lanza las filas delegadas con visibilidad en vivo (pane/tab/fallback)
+src/runRow.js          CLI estable `launch|wait|status` que usan las skills (sin comillas de shell)
+src/installRuntime.js  copia el runtime a ~/.inharness/runtime (ruta estable de hooks y skills)
 src/guardLogic.js      detecta invocación cruda + delegación activa (compartido)
 src/claudeGuardHook.js guardarraíl PreToolUse para Claude Code
 src/codexPreToolUse.cjs guardarraíl PreToolUse para Codex
@@ -233,22 +237,25 @@ skills/kimi/           agente markdown para Kimi Code
 comandos, con la sintaxis verificada contra sus versiones actuales, y avisa si
 detecta una versión distinta de la probada.
 
-**Visibilidad en vivo (pane → tab → fallback).** Cuando el orquestador
-delega una fila en otro CLI, la invocación no corre invisible detrás de un
-Bash: `src/paneLauncher.js` la abre en un split-pane de Windows Terminal si
-la sesión ya vive dentro de él (`WT_SESSION`), en una pestaña nueva si hay
-`wt.exe` en el PATH aunque no estemos dentro, y cae a la ejecución invisible
-y síncrona de siempre (`spawnCli.js`) si no hay Windows Terminal — una caída
-esperada, no un error. En pane/tab el proceso lanza `wt.exe` detached y no
-bloquea al orquestador; su salida combinada se vuelca al log habitual
-(`.inharness/log/<id>-<cli>.log`) cerrando con una línea sentinel
-(`###INHARNESS_EXIT:<código>###`), que `waitForCompletion` sondea para saber
-cuándo terminó la fila y con qué código. El usuario no invoca nada: abrir el
-pane/tab es un efecto automático del propio código. En modo pane/tab, el
-`input` (el prompt de la fila) viaja por un fichero temporal, no por el
-stdin de `wt.exe` (que no lo reenvía al pane que crea); en modo tab,
-`wt.exe` se invoca con `-w 0` para reutilizar la última ventana activa en
-vez de abrir una nueva por cada fila.
+**Visibilidad en vivo (pane → tab → fallback).** Las filas delegadas no corren
+invisibles: `src/paneLauncher.js` las abre en un split-pane de Windows Terminal
+si la sesión ya vive en él (`WT_SESSION`), en una pestaña nueva si hay `wt.exe`,
+y cae a ejecución síncrona sin ventana si no (`INHARNESS_FORCE_FALLBACK=1` lo
+fuerza). El orquestador no construye comandos: usa
+`node ~/.inharness/runtime/runRow.js launch|wait|status --id … --cli … --prompt-file …`.
+Nada sensible viaja por la línea de comandos de `wt.exe`: los parámetros van en un
+fichero temporal de un solo uso (0600, nombre aleatorio) y el prompt por stdin del
+hijo. El resultado se comunica fuera de banda: `<log>.exit` (JSON atómico con
+código, señal, error, tiempos) y `<log>.pid`; no hay centinela en el log.
+`launch` sobre un log con ejecución viva falla con `EBUSY`.
+
+**Windows seguro.** Los shims `.cmd` de npm (`codex`, `kimi`, …) se resuelven y
+se lanzan como `node script.js` directamente, sin pasar por cmd.exe: no hay
+inyección, saltos de línea ni límite de 8191. Un `.cmd`/`.bat` que no es shim se
+ejecuta con escape y se rechaza (`EUNSAFEARG`) si contiene `%`, LF, CR o NUL.
+
+**Linux/macOS.** Solo modo fallback (sin panes visibles); la lógica es la misma pero
+solo se ha verificado en Windows. Windows Terminal es la única vista en vivo.
 
 **Guardarraíl técnico, no solo una regla de prompt.** Que una skill "deba"
 pasar por `paneLauncher` en vez de invocar Codex/Kimi crudo es una
@@ -266,9 +273,20 @@ forma idempotente, un hook `PreToolUse` real:
 - **Kimi Code**: no tiene mecanismo de hooks hoy. No hay guardarraíl técnico
   posible ahí todavía — solo la regla de prompt en su skill.
 
+Los hooks apuntan a `~/.inharness/runtime/` (copia estable, no al paquete npx),
+caducan a las 12 h de `assignment.md` (`INHARNESS_STALE_HOURS`) y fallan abiertos.
+Salidas: `INHARNESS_ALLOW_RAW=1` en el comando permite una invocación cruda puntual;
+`INHARNESS_NO_GUARDRAILS=1` desactiva la instalación de hooks y runtime.
+`inharness` copia `settings.json` a `settings.json.bak-inharness` antes de tocarlo.
+
 **Catálogo persistente.** Cada arranque de `inharness` también escribe el
 descubrimiento de CLIs/modelos en `~/.inharness/catalog.json` (global, no
 por proyecto), como punto de arranque rápido para las skills.
+
+## Tests
+
+`npm test` (`node --test`, sin dependencias). `INHARNESS_LIVE_WT=1` activa las
+pruebas con Windows Terminal real.
 
 ## Contribuir
 
