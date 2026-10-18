@@ -146,6 +146,18 @@ propuesto es el que hace falta (nunca una plantilla fija de roles). Cada
 fila: que hace (frase corta), tier, archivos (sin solape - usa
 depends_on si dos filas comparten archivo), de que depende.
 
+**Busca primero paralelismo real antes de resolverlo en una sola fila.**
+No preguntes solo "cuantas piezas hacen falta" sino "que angulos de esta
+tarea son realmente independientes entre si" (ej: en una auditoria,
+seguridad / portabilidad / consistencia de docs son revisiones distintas,
+cada una a un CLI/modelo distinto). Esto incluye al propio CLI director -
+tu mismo -: si uno de esos angulos lo puedes resolver tu, es una fila mas,
+no solo "el que coordina" - resuelvela inline en esta misma sesion, sin
+lanzar un `codex exec` anidado sobre ti mismo. No anula la regla de arriba:
+una tarea sin angulos independientes sigue siendo 1 sola fila - lo que
+cambia es que hay que comprobarlo cada vez, no resolverlo todo en el
+primer CLI que venga a la cabeza.
+
 **Ficheros compartidos: solo los toca el orquestador.** El "sin solape" no
 basta con los ficheros que usan varias filas a la vez aunque ninguna los
 "posea": configuracion de tests (`conftest.py`, `pytest.ini`,

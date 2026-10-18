@@ -168,6 +168,19 @@ y por qué el número de piezas que vas a proponer es el que hace falta (ni
 una plantilla fija de roles, ni inflar piezas para una tarea trivial: una
 tarea de una línea puede necesitar 1 sola fila).
 
+**Busca primero paralelismo real antes de conformarte con una sola fila.**
+No te preguntes solo "¿cuántas piezas hacen falta?" sino "¿qué ángulos de
+esta tarea son genuinamente independientes entre sí?" (p. ej., en una
+auditoría: seguridad, portabilidad y consistencia de documentación son
+revisiones distintas que pueden correr a la vez, cada una a un CLI/modelo
+distinto). Esto incluye al propio CLI director — tú mismo —: si uno de esos
+ángulos te lo puedes quedar tú, hazlo como una fila más (usa la herramienta
+`Agent`, no te limites a repartir solo entre Codex y Kimi mientras tú solo
+coordinas). Esto NO anula la regla de arriba: una tarea que de verdad no
+tiene ángulos independientes sigue resolviéndose en 1 sola fila — lo que
+cambia es que tienes que comprobarlo activamente cada vez, no asumirlo por
+pereza ni resolverlo todo en el primer CLI que te venga a la cabeza.
+
 Cada fila declara: qué hace (frase corta), a qué tier pertenece, qué
 archivos toca (sin solape con otra fila — si se solapan, usa dependencia en
 vez de paralelo), y de qué filas depende.

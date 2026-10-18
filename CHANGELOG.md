@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.1 — 2026-10-18
+
+### Cambiado
+- **Paso 2 de las tres skills: buscar paralelismo real antes de resolver en
+  una sola fila.** Hasta ahora, "no inflar piezas para una tarea trivial"
+  se usaba como excusa para despachar tareas con ángulos genuinamente
+  independientes (p. ej. seguridad / portabilidad / consistencia de docs en
+  una auditoría) a un único CLI en serie, incluso cuando el propio CLI
+  director podía quedarse con uno de esos ángulos. Ahora el Paso 2 pide
+  comprobar activamente si hay ángulos independientes — incluido el propio
+  director, resolviéndolos inline (Claude: vía `Agent`; Codex/Kimi: en la
+  misma sesión, sin anidar otro proceso) — antes de conformarse con una sola
+  fila. La regla de no inflar tareas triviales se mantiene intacta para
+  cuando de verdad no hay nada que paralelizar.
+
 ## 0.3.0 — 2026-10-18
 
 ### Añadido
