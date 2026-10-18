@@ -82,3 +82,14 @@ test('ambos hooks permiten, deniegan y sobreviven a errores', (t) => {
     fs.writeFileSync(assignment, '| estado |\n| --- |\n| en curso |\n');
   }
 });
+
+test('detecta envoltorios, shells -c y flags globales de codex', () => {
+  for (const command of [
+    'npx codex exec -m a x', 'timeout 600 codex exec x', 'codex -m gpt-6 exec x',
+    'bash -c "codex exec x"', 'powershell -Command "codex.ps1 exec x"', 'cmd /c codex exec x',
+    'node /a/codex.js exec x', 'time codex e foo',
+  ]) assert.equal(isRawInvocation(command), true, command);
+  for (const command of ['codex --version', 'codex login', 'echo codex exec', 'bash -c "ls"', 'node script.js']) {
+    assert.equal(isRawInvocation(command), false, command);
+  }
+});

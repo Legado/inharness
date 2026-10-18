@@ -25,10 +25,14 @@ function readConfig(file) {
   }
 }
 
-function writeAtomic(file, content) {
+function writeAtomic(link, content) {
+  // Un dotfile enlazado (symlink) debe seguir siendo un enlace: se escribe el destino real.
+  let file = link;
+  let mode = 0o600;
+  try { file = fs.realpathSync(link); mode = fs.statSync(file).mode & 0o777; } catch { /* aun no existe */ }
   const temporary = `${file}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
   try {
-    fs.writeFileSync(temporary, content, { flag: 'wx', mode: 0o600 });
+    fs.writeFileSync(temporary, content, { flag: 'wx', mode });
     fs.renameSync(temporary, file);
   } finally {
     try { fs.unlinkSync(temporary); } catch (err) { if (err.code !== 'ENOENT') throw err; }

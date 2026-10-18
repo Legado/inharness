@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { buildSpawn, parseNpmCmdShim, escapeForCmd } = require('../src/winArgs');
+const { buildSpawn, parseNpmCmdShim, parseNativeCmdShim, escapeForCmd } = require('../src/winArgs');
 
 function fixture(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'inharness-win args-&-'));
@@ -116,4 +116,25 @@ test('Windows: batch arbitrario rechaza LF, CR, NUL y porcentajes antes del spaw
   const batch = path.join(dir, '%PATH%.cmd');
   fs.writeFileSync(batch, '@echo off\r\necho %*\r\n');
   assert.throws(() => buildSpawn(batch, []), { code: 'EUNSAFEARG' });
+});
+
+test('Windows: cmd-shim de binario nativo (claude.cmd) se lanza directo y conserva % y saltos de linea', { skip: process.platform !== 'win32' }, (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'inharness-native shim-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const exe = path.join(dir, 'node_modules', 'tool', 'bin', 'tool.exe');
+  fs.mkdirSync(path.dirname(exe), { recursive: true });
+  fs.copyFileSync(process.execPath, exe);
+  const shim = path.join(dir, 'tool.cmd');
+  const source = ['@ECHO off', 'GOTO start', ':find_dp0', 'SET dp0=%~dp0', 'EXIT /b', ':start',
+    'SETLOCAL', 'CALL :find_dp0', '"%dp0%\\node_modules\\tool\\bin\\tool.exe"   %*', ''].join('\r\n');
+  fs.writeFileSync(shim, source);
+  assert.equal(parseNativeCmdShim(shim), exe);
+  const args = ['-e', 'process.stdout.write(JSON.stringify(process.argv.slice(1)))', '100%', 'a\nb', 'x&echo PWNED'];
+  const spec = buildSpawn(shim, args);
+  assert.deepEqual(spec, { file: exe, args, windowsVerbatimArguments: false, via: 'direct' });
+  assert.deepEqual(JSON.parse(execute(spec, dir).stdout), args.slice(2));
+  fs.writeFileSync(shim, source.replace('tool.exe"', 'tool.exe" & echo PWNED'));
+  assert.equal(parseNativeCmdShim(shim), null);
+  fs.writeFileSync(shim, source.replace('tool.exe', 'missing.exe'));
+  assert.equal(parseNativeCmdShim(shim), null);
 });

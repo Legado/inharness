@@ -242,16 +242,19 @@ invisibles: `src/paneLauncher.js` las abre en un split-pane de Windows Terminal
 si la sesión ya vive en él (`WT_SESSION`), en una pestaña nueva si hay `wt.exe`,
 y cae a ejecución síncrona sin ventana si no (`INHARNESS_FORCE_FALLBACK=1` lo
 fuerza). El orquestador no construye comandos: usa
-`node ~/.inharness/runtime/runRow.js launch|wait|status --id … --cli … --prompt-file …`.
+`node ~/.inharness/runtime/runRow.js launch --id … --cli codex|kimi|claude --model … --prompt-file …`
+(y `wait`/`status` con `--id` y `--cli`); el log queda en `.inharness/log/<id>-<cli>.log`.
+`INHARNESS_PANE_LINGER_MS` ajusta cuánto sigue abierta la pestaña al terminar (2 s si va bien, 15 s si falla).
 Nada sensible viaja por la línea de comandos de `wt.exe`: los parámetros van en un
 fichero temporal de un solo uso (0600, nombre aleatorio) y el prompt por stdin del
 hijo. El resultado se comunica fuera de banda: `<log>.exit` (JSON atómico con
-código, señal, error, tiempos) y `<log>.pid`; no hay centinela en el log.
+código, señal, error, `aborted`, tiempos) y `<log>.pid`; no hay centinela en el log.
 `launch` sobre un log con ejecución viva falla con `EBUSY`.
 
 **Windows seguro.** Los shims `.cmd` de npm (`codex`, `kimi`, …) se resuelven y
 se lanzan como `node script.js` directamente, sin pasar por cmd.exe: no hay
-inyección, saltos de línea ni límite de 8191. Un `.cmd`/`.bat` que no es shim se
+inyección, saltos de línea ni límite de 8191. Los shims de binario nativo
+(`claude.cmd` → `claude.exe`) lanzan el `.exe` directo. Un `.cmd`/`.bat` que no es shim se
 ejecuta con escape y se rechaza (`EUNSAFEARG`) si contiene `%`, LF, CR o NUL.
 
 **Linux/macOS.** Solo modo fallback (sin panes visibles); la lógica es la misma pero
@@ -277,7 +280,7 @@ Los hooks apuntan a `~/.inharness/runtime/` (copia estable, no al paquete npx),
 caducan a las 12 h de `assignment.md` (`INHARNESS_STALE_HOURS`) y fallan abiertos.
 Salidas: `INHARNESS_ALLOW_RAW=1` en el comando permite una invocación cruda puntual;
 `INHARNESS_NO_GUARDRAILS=1` desactiva la instalación de hooks y runtime.
-`inharness` copia `settings.json` a `settings.json.bak-inharness` antes de tocarlo.
+`inharness` copia `settings.json`/`hooks.json` a `<fichero>.bak-inharness` antes de tocarlos.
 
 **Catálogo persistente.** Cada arranque de `inharness` también escribe el
 descubrimiento de CLIs/modelos en `~/.inharness/catalog.json` (global, no

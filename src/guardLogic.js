@@ -43,16 +43,43 @@ function tokens(segment) {
   return segment.match(/"[^"]*"|'[^']*'|[^\s]+/g) || [];
 }
 
+const WRAPPERS = new Set(['npx', 'timeout', 'time', 'nohup', 'command', 'exec', 'sudo', 'nice', 'stdbuf']);
+const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash', 'cmd', 'powershell', 'pwsh']);
+const unquote = (word) => word.replace(/^["']|["']$/g, '');
+
+function exeName(word) {
+  return unquote(word).replace(/\\/g, '/').split('/').pop().replace(/\.(?:cmd|exe|ps1|js|mjs|cjs)$/i, '').toLowerCase();
+}
+
 /** true si el primer ejecutable de algun segmento invoca Codex o Kimi crudo. */
-function isRawInvocation(command) {
-  if (typeof command !== 'string') return false;
+function isRawInvocation(command, depth = 0) {
+  if (typeof command !== 'string' || depth > 3) return false;
   if (/paneLauncher|runRow/i.test(command) || command.includes('INHARNESS_ALLOW_RAW=1')) return false;
   for (const segment of segments(command)) {
     const words = tokens(segment.trim());
-    while (words.length && (/^[A-Za-z_][A-Za-z_0-9]*=/.test(words[0]) || words[0] === 'env')) words.shift();
+    for (;;) {
+      if (!words.length) break;
+      const head = exeName(words[0]);
+      if (/^[A-Za-z_][A-Za-z_0-9]*=/.test(words[0]) || head === 'env') { words.shift(); continue; }
+      if (WRAPPERS.has(head) || head === 'node') {
+        words.shift();
+        // opciones y duraciones del envoltorio (timeout 600, npx -y, nice -n 5)
+        while (words.length && (/^-/.test(words[0]) || /^\d+[smhd]?$/.test(words[0]))) words.shift();
+        continue;
+      }
+      break;
+    }
     if (!words.length) continue;
-    const executable = words.shift().replace(/^["']|["']$/g, '').replace(/\\/g, '/').split('/').pop().replace(/\.(?:cmd|exe)$/i, '').toLowerCase();
-    if (executable === 'codex' && /^(?:exec|e)$/.test(words[0] || '')) return true;
+    const executable = exeName(words.shift());
+    if (SHELLS.has(executable)) {
+      const at = words.findIndex((word) => /^(?:-c|-lc|-command|\/c)$/i.test(word));
+      if (at !== -1 && words[at + 1] && isRawInvocation(unquote(words.slice(at + 1).join(' ')), depth + 1)) return true;
+      continue;
+    }
+    if (executable === 'codex') {
+      const sub = words.find((word) => !word.startsWith('-') && !/^\d+$/.test(word) && !/^(?:gpt|o\d)/.test(word));
+      if (/^(?:exec|e)$/.test(sub || '')) return true;
+    }
     if (executable === 'kimi' && words.some((word) => /^(?:-p|--prompt)(?:=.*)?$/.test(word))) return true;
   }
   return false;

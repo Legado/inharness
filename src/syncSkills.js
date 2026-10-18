@@ -4,7 +4,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 
-const PKG_VERSION = require('../package.json').version;
+// Desde el runtime copiado (~/.inharness/runtime) no hay ../package.json: cae al fichero VERSION.
+const PKG_VERSION = (() => {
+  try { return require('../package.json').version; } catch { /* copia en el runtime */ }
+  try { return fs.readFileSync(path.join(__dirname, 'VERSION'), 'utf8').trim(); } catch { return 'unknown'; }
+})();
 const MARKER = `<!-- inharness-version: ${PKG_VERSION} -->`;
 
 /**

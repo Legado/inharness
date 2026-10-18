@@ -24,14 +24,14 @@ skills usan `runRow.js` en lugar de recetas de shell.
 
 ### Añadido
 - `src/runRow.js` (`launch|wait|status`) y skills de Claude/Codex/Kimi reescritas.
-- `npm test` (75 tests); `.gitignore`; autoignore de `.inharness/`.
+- `npm test` (77 tests; 3 dependen de plataforma o de `INHARNESS_LIVE_WT=1`); `.gitignore`; autoignore de `.inharness/`.
 - Variables: `INHARNESS_FORCE_FALLBACK`, `INHARNESS_ALLOW_RAW`, `INHARNESS_NO_GUARDRAILS`,
-  `INHARNESS_STALE_HOURS`.
+  `INHARNESS_STALE_HOURS`, `INHARNESS_PANE_LINGER_MS`, `INHARNESS_LIVE_WT` (tests).
 
 ### Limitaciones conocidas
 - Hook de Codex *untrusted* hasta confirmarlo en `/hooks`; Kimi sin hooks.
 - Solo verificado en Windows; Linux/macOS usan fallback.
-- `claude.cmd` va por cmd.exe (rechaza `%` y saltos de línea).
+- Un `.cmd`/`.bat` que no es shim npm ni de binario nativo va por cmd.exe (rechaza `%` y saltos de línea).
 
 ## 0.3.2 — 2026-10-18
 

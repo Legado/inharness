@@ -29,6 +29,23 @@ function parseNpmCmdShim(shimPath) {
   }
 }
 
+// cmd-shim de un binario nativo (p.ej. claude.cmd -> claude.exe): se lanza el .exe sin cmd.exe.
+function parseNativeCmdShim(shimPath) {
+  let source;
+  try { source = fs.readFileSync(shimPath, 'utf8'); } catch { return null; }
+  const lines = source.replace(/^﻿/, '').trim().split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const header = [
+    /^@ECHO off$/i, /^GOTO start$/i, /^:find_dp0$/i,
+    /^SET (?:dp0=%~dp0|"dp0=%~dp0")$/i, /^EXIT \/b$/i, /^:start$/i,
+    /^SETLOCAL$/i, /^CALL :find_dp0$/i,
+  ];
+  if (lines.length !== header.length + 1 || !header.every((pattern, index) => pattern.test(lines[index]))) return null;
+  const match = /^"%dp0%[\\/]([^"%\r\n\0]+\.exe)"\s+%\*$/i.exec(lines[header.length]);
+  if (!match) return null;
+  const exe = path.resolve(path.dirname(path.resolve(shimPath)), ...match[1].split(/[\\/]/));
+  try { return fs.statSync(exe).isFile() ? exe : null; } catch { return null; }
+}
+
 const cmdMeta = /([()\][%!^"`<>&|;, *?])/g;
 
 function escapeForCmd(arg) {
@@ -54,6 +71,8 @@ function buildSpawn(command, args, opts = {}) {
   if (shim) {
     return { file: shim.node || nodePath, args: [shim.script, ...args], windowsVerbatimArguments: false, via: 'npm-shim' };
   }
+  const native = parseNativeCmdShim(file);
+  if (native) return { file: native, args, windowsVerbatimArguments: false, via: 'direct' };
 
   // cmd.exe no garantiza transportar saltos de linea, NUL ni expansion de porcentajes.
   if ([file, ...args].some((arg) => /[\n\r\0%]/.test(arg))) {
@@ -67,4 +86,4 @@ function buildSpawn(command, args, opts = {}) {
   return { file: cmd, args: ['/d', '/s', '/c', `"${line}"`], windowsVerbatimArguments: true, via: 'cmd' };
 }
 
-module.exports = { buildSpawn, parseNpmCmdShim, escapeForCmd };
+module.exports = { buildSpawn, parseNpmCmdShim, parseNativeCmdShim, escapeForCmd };
