@@ -368,3 +368,13 @@ test('Kimi: 20000 comillas exceden CreateProcess y usan la ruta citada sin ejecu
   assert.equal(r.code, 0, r.stderr);
   assert.equal(dump().argv[3], 'Lee el fichero "lee; esto & %PATH%.md" y ejecuta por completo su contenido');
 });
+
+test('fallback nunca es silencioso: visible false y aviso en stderr y JSON', (t) => {
+  const { run, prompt } = setup(t);
+  const r = run(['launch', '--id', '1', '--cli', 'codex', '--model', 'm', '--prompt-file', prompt('p.md', 'hola')]);
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(r.json.mode, 'fallback');
+  assert.equal(r.json.visible, false);
+  assert.match(r.json.warning, /SIN VENTANA.*INHARNESS_FORCE_FALLBACK/);
+  assert.match(r.stderr, /\[inharness\] AVISO: SIN VENTANA/);
+});

@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { isRawInvocation, hasActiveRows, hasActiveDelegation, BLOCK_MESSAGE } = require('../src/guardLogic');
+const { isRawInvocation, hasActiveRows, hasActiveDelegation, candidateDirs, shouldBlock, BLOCK_MESSAGE } = require('../src/guardLogic');
 
 test('detecta invocaciones en posicion de comando, no menciones', () => {
   const yes = [
@@ -97,4 +97,52 @@ test('detecta envoltorios, shells -c y flags globales de codex', () => {
 test('reparto en texto libre (sin tabla) tambien cuenta como delegacion activa', () => {
   assert.equal(hasActiveRows('F1 claude HECHO\nF2 codex en curso\nF4 codex pendiente'), true);
   assert.equal(hasActiveRows('F1 claude HECHO\nF2 codex HECHO'), false);
+});
+
+test('regresion fte-manager: texto libre con filas sin estado, cwd padre y cd/-C', (t) => {
+  const markdown = [
+    '# Estado (2026-10-18)',
+    'F1 claude  HECHO: proyecto enlazado',
+    'F5 claude opus  PARCIAL: harness',
+    'PENDIENTE (delegar via runRow en pestanas):',
+    ' P1 cerrar las 33 diferencias de orden',
+    ' P2 HECHO (claude): CAST',
+  ].join('\n');
+  assert.equal(hasActiveRows(markdown), true);
+  assert.equal(hasActiveRows('F1 claude HECHO\nF2 codex hecho, commit x\nF3 kimi fallido'), false);
+
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'inharness-cand-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const project = path.join(root, 'proyecto');
+  fs.mkdirSync(path.join(project, '.inharness'), { recursive: true });
+  fs.mkdirSync(path.join(project, 'sub'));
+  fs.writeFileSync(path.join(project, '.inharness', 'assignment.md'), markdown);
+  const fwd = project.split(path.sep).join('/');
+  const raw = 'codex.cmd exec -m gpt -c x=1 --sandbox workspace-write - < .inharness/prompts/P1.md > .inharness/log/P1-codex.log 2>&1';
+  // El comando exacto que se colo: subshell en segundo plano, heredoc previo y cwd del proyecto.
+  const exact = `mkdir -p .inharness/prompts && cat > .inharness/prompts/P1.md <<'EOF'\nprompt\nEOF\n(${raw}; echo $? > x) &\necho lanzado`;
+  assert.equal(shouldBlock(exact, project), true);
+  assert.equal(shouldBlock(raw, path.join(project, 'sub')), true, 'subcarpeta');
+  assert.equal(shouldBlock(`cd "${fwd}" && ${raw}`, root), true, 'cd desde la carpeta padre');
+  assert.equal(shouldBlock(`codex exec -C "${fwd}" -`, root), true, '-C');
+  if (process.platform === 'win32') {
+    const gitBash = fwd.replace(/^([A-Za-z]):/, (_, d) => `/${d.toLowerCase()}`);
+    assert.equal(shouldBlock(`cd ${gitBash} && ${raw}`, root), true, 'ruta Git Bash');
+  }
+  assert.equal(shouldBlock(raw, root), false, 'carpeta sin delegacion');
+  assert.equal(shouldBlock(`node "$HOME/.inharness/runtime/runRow.js" launch --id P1 --cli codex --model m --prompt-file p.md`, project), false);
+  assert.equal(shouldBlock(`cat > p.md <<'EOF'\nusa runRow\nEOF\n${raw}`, project), true, 'mencionar runRow no exime');
+  assert.ok(candidateDirs(`cd "${fwd}" && codex exec -`, root).includes(path.resolve(project)));
+});
+
+test('el hook de Claude tambien cubre la herramienta PowerShell', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'inharness-ps-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, '.inharness'));
+  fs.writeFileSync(path.join(root, '.inharness', 'assignment.md'), 'P1 codex pendiente\n');
+  const script = path.join(__dirname, '..', 'src', 'claudeGuardHook.js');
+  const r = spawnSync(process.execPath, [script], { encoding: 'utf8', input: JSON.stringify({
+    cwd: root, tool_name: 'PowerShell', hook_event_name: 'PreToolUse', tool_input: { command: 'codex.cmd exec -m x -' },
+  }) });
+  assert.equal(JSON.parse(r.stdout).hookSpecificOutput.permissionDecision, 'deny');
 });

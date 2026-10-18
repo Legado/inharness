@@ -39,7 +39,7 @@ function writeAtomic(link, content) {
   }
 }
 
-function installGuard(file, marker, matcher, desired, create) {
+function installGuard(file, marker, matchers, makeDesired, create) {
   const read = readConfig(file);
   if (!read || (!create && !read.exists)) return false;
   try {
@@ -47,27 +47,30 @@ function installGuard(file, marker, matcher, desired, create) {
     if (config.hooks !== undefined && (!config.hooks || typeof config.hooks !== 'object' || Array.isArray(config.hooks))) throw new Error('hooks debe ser un objeto');
     const groups = config.hooks && config.hooks.PreToolUse;
     if (groups !== undefined && !Array.isArray(groups)) throw new Error('PreToolUse debe ser una lista');
-    let found = false;
     let changed = false;
-    for (const group of groups || []) {
-      if (!group || group.matcher !== matcher || !Array.isArray(group.hooks)) continue;
-      for (const hook of group.hooks) {
-        if (!hook || hook.type !== 'command' || typeof hook.command !== 'string' || !hook.command.includes(marker)) continue;
-        found = true;
-        for (const key of ['command', 'commandWindows']) {
-          const wanted = key === 'commandWindows' && desired[key] === undefined && hook[key] !== undefined ? desired.command : desired[key];
-          if (wanted !== undefined && hook[key] !== wanted) {
-            hook[key] = wanted;
-            changed = true;
+    for (const matcher of [].concat(matchers)) {
+      const desired = makeDesired();
+      let found = false;
+      for (const group of (config.hooks && config.hooks.PreToolUse) || []) {
+        if (!group || group.matcher !== matcher || !Array.isArray(group.hooks)) continue;
+        for (const hook of group.hooks) {
+          if (!hook || hook.type !== 'command' || typeof hook.command !== 'string' || !hook.command.includes(marker)) continue;
+          found = true;
+          for (const key of ['command', 'commandWindows']) {
+            const wanted = key === 'commandWindows' && desired[key] === undefined && hook[key] !== undefined ? desired.command : desired[key];
+            if (wanted !== undefined && hook[key] !== wanted) {
+              hook[key] = wanted;
+              changed = true;
+            }
           }
         }
       }
-    }
-    if (!found) {
-      config.hooks = config.hooks || {};
-      config.hooks.PreToolUse = groups || [];
-      config.hooks.PreToolUse.push({ matcher, hooks: [desired] });
-      changed = true;
+      if (!found) {
+        config.hooks = config.hooks || {};
+        config.hooks.PreToolUse = config.hooks.PreToolUse || groups || [];
+        config.hooks.PreToolUse.push({ matcher, hooks: [desired] });
+        changed = true;
+      }
     }
     if (!changed) return false;
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -85,20 +88,20 @@ function installGuard(file, marker, matcher, desired, create) {
 
 function installClaudeGuard() {
   const guardPath = path.join(runtimeDir(), CLAUDE_GUARD_MARKER).replace(/\\/g, '/');
-  return installGuard(path.join(os.homedir(), '.claude', 'settings.json'), CLAUDE_GUARD_MARKER, 'Bash', {
-    type: 'command', command: `node ${shQuote(guardPath)}`, timeout: 5,
-  }, true);
+  // Claude Code en Windows tambien ejecuta comandos con su herramienta PowerShell: mismo guard, otro grupo.
+  return installGuard(path.join(os.homedir(), '.claude', 'settings.json'), CLAUDE_GUARD_MARKER, ['Bash', 'PowerShell'],
+    () => ({ type: 'command', command: `node ${shQuote(guardPath)}`, timeout: 5 }), true);
 }
 
 function installCodexGuard() {
   const guardPath = path.join(runtimeDir(), CODEX_GUARD_MARKER).replace(/\\/g, '/');
-  return installGuard(path.join(os.homedir(), '.codex', 'hooks.json'), CODEX_GUARD_MARKER, '^Bash$', {
+  return installGuard(path.join(os.homedir(), '.codex', 'hooks.json'), CODEX_GUARD_MARKER, '^Bash$', () => ({
     type: 'command',
     command: `node ${shQuote(guardPath)}`,
     commandWindows: `& ${psQuote(process.execPath)} ${psQuote(guardPath)}; exit $LASTEXITCODE`,
     timeout: 10,
     statusMessage: 'inharness: comprobar delegacion activa',
-  }, false);
+  }), false);
 }
 
 function installGuardrails({ silent = false } = {}) {

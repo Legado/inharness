@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.1 — 2026-10-18
+
+Las filas delegadas vuelven a verse en Windows Terminal.
+
+### Corregido
+- Skills: regla dura de lanzar las filas solo con `runRow.js launch` (nunca `codex exec`/`kimi -p` crudos ni en segundo plano); se quitan los ejemplos que inducían la invocación cruda.
+- Guard: en texto libre, toda fila con id sin "hecho"/"fallido" cuenta como activa; busca `assignment.md` en carpetas padre y en destinos de `cd`/`-C`; mencionar runRow ya no exime; el hook de Claude cubre también la herramienta PowerShell.
+- Fuera de Windows Terminal las filas se abren en una ventana propia `inharness` en vez de una ventana WT cualquiera.
+- `launch` espera a que la pestaña arranque (código 1 si no); el fallback sin ventana ya no es silencioso (`visible:false`, `warning` y aviso en stderr).
+- `syncSkills` compara el contenido completo: los cambios de texto llegan aunque no cambie la versión.
+
 ## 0.4.0 — 2026-10-18
 
 Revisión thermo-nuclear de todo el proyecto. **Cambios incompatibles:** el log ya

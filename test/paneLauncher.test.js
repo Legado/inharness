@@ -83,7 +83,7 @@ test('fallback: corpus intacto, .gitignore en .inharness y sin restos de una eje
   fs.writeFileSync(`${log}.exit`, '{"exitCode":99}');
   fs.writeFileSync(`${log}.pid`, '1');
   const r = pl.launchInPane({ command: process.execPath, args: [dump, ...CORPUS], cwd: dir, input: INPUT, logFile: '.inharness/log/f.log' });
-  assert.deepEqual(r, { mode: 'fallback', pid: null, logFile: log, exitFile: `${log}.exit` });
+  assert.deepEqual(r, { mode: 'fallback', pid: null, logFile: log, exitFile: `${log}.exit`, reason: 'INHARNESS_FORCE_FALLBACK=1' });
   assert.equal(fs.readFileSync(path.join(dir, '.inharness', '.gitignore'), 'utf8'), '*\n');
   assert.equal(fs.existsSync(`${log}.pid`), false);
   const got = dumpLine(fs.readFileSync(log, 'utf8'));
@@ -483,4 +483,13 @@ test('VIVO wt: tab con corpus, rutas con ";" y cierre del helper', { skip: !LIVE
   assert.ok(Date.now() - t0 < 5000);
   const jobs = path.join(os.tmpdir(), 'inharness-jobs');
   assert.deepEqual(fs.existsSync(jobs) ? fs.readdirSync(jobs) : [], []);
+});
+
+test('waitForStart detecta si el helper reservo el log o no arranco', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'inharness-start-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const log = path.join(dir, 'a.log');
+  assert.equal(await pl.waitForStart(log, { timeoutMs: 300, pollMs: 50 }), false);
+  setTimeout(() => fs.writeFileSync(`${log}.pid`, '1'), 100);
+  assert.equal(await pl.waitForStart(log, { timeoutMs: 3000, pollMs: 50 }), true);
 });

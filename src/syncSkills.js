@@ -35,10 +35,10 @@ const TARGETS = [
   },
 ];
 
-function isUpToDate(targetPath) {
+// Contenido exacto, no solo el marcador: un cambio de texto sin subir la version tambien debe llegar.
+function isUpToDate(targetPath, srcPath) {
   try {
-    const content = fs.readFileSync(targetPath, 'utf8');
-    return content.includes(MARKER);
+    return fs.readFileSync(targetPath, 'utf8') === stampedContent(srcPath);
   } catch {
     return false;
   }
@@ -59,7 +59,7 @@ function syncSkills({ silent = false } = {}) {
       const srcPath = path.join(__dirname, '..', 'skills', ...file.from);
       const destPath = path.join(...file.to);
       if (!fs.existsSync(srcPath)) continue;
-      if (isUpToDate(destPath)) continue;
+      if (isUpToDate(destPath, srcPath)) continue;
       fs.mkdirSync(path.dirname(destPath), { recursive: true });
       fs.writeFileSync(destPath, stampedContent(srcPath), 'utf8');
       updated.push(target.cli);

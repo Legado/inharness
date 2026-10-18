@@ -14,6 +14,7 @@ const { buildSpawn } = require('./winArgs');
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const MAX_OUTPUT_CHARS = 1000000;
 const JOB_FLAG = '--inharness-job';
+const WT_WINDOW_NAME = 'inharness';
 
 function insideWindowsTerminal() {
   return Boolean(process.env.WT_SESSION);
@@ -212,8 +213,8 @@ function runFallback({ command, args, absCwd, input, absLog, timeoutMs }) {
 function launchInPane({ command, args = [], cwd, input, logFile, title, timeoutMs } = {}) {
   const { absCwd, absLog } = validate({ command, args, cwd, input, logFile, title, timeoutMs });
   prepareLog(absCwd, absLog);
-  const result = (mode, pid) => ({ mode, pid, logFile: absLog, exitFile: `${absLog}.exit` });
-  const fallback = () => {
+  const result = (mode, pid, extra = {}) => ({ mode, pid, logFile: absLog, exitFile: `${absLog}.exit`, ...extra });
+  const fallback = (reason) => {
     // Reservar antes de ejecutar: dos lanzamientos concurrentes no deben compartir log ni .exit.
     try {
       fs.writeFileSync(`${absLog}.pid`, String(process.pid), { flag: 'wx', mode: 0o600 });
@@ -226,14 +227,14 @@ function launchInPane({ command, args = [], cwd, input, logFile, title, timeoutM
     } finally {
       fs.rmSync(`${absLog}.pid`, { force: true });
     }
-    return result('fallback', null);
+    return result('fallback', null, { reason });
   };
 
-  if (process.env.INHARNESS_FORCE_FALLBACK === '1') return fallback();
+  if (process.env.INHARNESS_FORCE_FALLBACK === '1') return fallback('INHARNESS_FORCE_FALLBACK=1');
   const usePane = insideWindowsTerminal();
   let wtExe = null;
   try { wtExe = findWindowsTerminal(); } catch { wtExe = null; }
-  if (!wtExe) return fallback();
+  if (!wtExe) return fallback(process.platform === 'win32' ? 'no se encontro wt.exe (Windows Terminal)' : 'no es Windows');
 
   const cleanTitle = sanitizeTitle(title);
   let jobFile;
@@ -242,27 +243,44 @@ function launchInPane({ command, args = [], cwd, input, logFile, title, timeoutM
       command, args, cwd: absCwd, input: input == null ? null : input, logFile: absLog, title: cleanTitle,
       timeoutMs: timeoutMs || null,
     });
-  } catch {
-    return fallback();
+  } catch (error) {
+    return fallback(`no se pudo crear el job: ${error.message}`);
   }
-  const wtArgs = ['-w', '0', usePane ? 'split-pane' : 'new-tab', '--title', cleanTitle,
+  // Dentro de WT: pane en la ventana activa. Fuera (sin WT_SESSION, p. ej. VS Code u otra consola), "-w 0"
+  // caeria en una ventana de WT cualquiera, quiza minimizada o detras: se usa una ventana propia con nombre,
+  // que WT crea en primer plano la primera vez y reutiliza (una pestana por fila) despues.
+  const wtWindow = usePane ? '0' : WT_WINDOW_NAME;
+  const wtArgs = ['-w', wtWindow, usePane ? 'split-pane' : 'new-tab', '--title', cleanTitle,
     escapeWt(process.execPath), escapeWt(__filename), JOB_FLAG, escapeWt(jobFile)];
 
   let wt;
+  let spawnError = null;
   try {
     // Nunca windowsHide: la pestana naceria oculta.
     wt = spawn(wtExe, wtArgs, { cwd: absCwd, stdio: 'ignore', detached: true });
-  } catch {
+  } catch (error) {
     wt = null;
+    spawnError = error;
   }
   if (!wt || !wt.pid) {
     if (wt) wt.on('error', () => {});
     fs.rmSync(jobFile, { force: true });
-    return fallback();
+    return fallback(`wt.exe no arranco: ${spawnError ? spawnError.message : 'sin pid'}`);
   }
   wt.on('error', () => {});
   wt.unref();
-  return result(usePane ? 'pane' : 'tab', wt.pid);
+  return result(usePane ? 'pane' : 'tab', wt.pid, { window: wtWindow, jobFile });
+}
+
+// Espera a que el helper de la pestana reserve el log (.pid) o termine (.exit). Si no aparece, wt.exe
+// acepto la orden pero no abrio nada visible: el llamante debe decirlo, no darlo por lanzado.
+async function waitForStart(absLog, { timeoutMs = 20000, pollMs = 200 } = {}) {
+  const begin = Date.now();
+  for (;;) {
+    if (fs.existsSync(`${absLog}.pid`) || fs.existsSync(`${absLog}.exit`)) return true;
+    if (Date.now() - begin >= timeoutMs) return false;
+    await sleep(pollMs);
+  }
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -357,7 +375,7 @@ async function waitForCompletion(logFile, { pollMs = 1000, timeoutMs = 600000, s
   }
 }
 
-module.exports = { launchInPane, waitForCompletion, hasWindowsTerminal, insideWindowsTerminal };
+module.exports = { launchInPane, waitForCompletion, waitForStart, hasWindowsTerminal, insideWindowsTerminal, WT_WINDOW_NAME };
 
 // ---- Helper que corre dentro de la pestana: node paneLauncher.js --inharness-job <ruta> ----
 

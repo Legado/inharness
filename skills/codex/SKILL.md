@@ -21,7 +21,8 @@ de suscripcion ya logueada.
 
 **Claude y Kimi son binarios de linea de comandos YA instalados y YA
 autenticados por suscripcion en esta maquina** - se invocan como cualquier
-otro comando de terminal (`claude ...`, `kimi ...`), nunca por red, nunca
+otro comando de terminal para consultas (`claude --version`, `kimi provider list`)
+y SOLO mediante `runRow.js` para ejecutar filas (Paso 3), nunca por red, nunca
 con una clave de API, nunca eligiendo un "proveedor". Si en algun momento
 te encuentras queriendo pedirle al usuario una API key, una clave, o "que
 proveedor/modelo de API usar", te has desviado por completo del proposito
@@ -80,8 +81,9 @@ suscripcion y tokens de esta sesion - tratalos como recurso escaso:
   para aprobar/decidir y los resultados/fallos - no repitas el contenido de
   esta skill de vuelta.
 - **Paralelo cuando no hay dependencia**: si dos o mas filas no dependen
-  entre si, lanza esas llamadas a Claude/Kimi en paralelo (procesos en
-  segundo plano) en vez de esperar una a una en secuencia. Solo esperas de
+  entre si, lanzalas todas seguidas con `runRow.js launch` (cada una abre
+  su pestana y vuelve en segundos; ver Paso 3) y esperalas despues con
+  `runRow.js wait`, en vez de esperar una a una en secuencia. Solo esperas de
   verdad a una fila cuando otra depende de ella.
 - **Comprobacion proporcional, no narrada**: tras cada llamada, valida con
   lo minimo que baste segun lo que produce la fila. Si solo produce un
@@ -197,16 +199,29 @@ una herramienta sin permiso puede ser denegada o requerir aprobacion y
 agotar el timeout. Revisa `wait` y el log; prepara permisos concretos en
 una sesion interactiva o reasigna la fila. No actives bypass de permisos.
 
-**Visibilidad en vivo (Windows Terminal):** lanza las filas externas con
-`runRow.js`, que `inharness` instala en `~/.inharness/runtime/` en cada
-arranque. Abre pane/tab si hay Windows Terminal; en fallback ejecuta sin
-ventana. El usuario no tiene que abrir nada. Con pane/tab `launch` vuelve
-al instante; en fallback bloquea hasta terminar. Para filas independientes
-usa el segundo plano de tu herramienta cuando el fallback pueda bloquear
-(en Claude, `Bash` con `run_in_background: true`). Espera las dependencias.
+**REGLA DURA - lanzar filas externas SOLO con runRow.js.** Toda fila que
+ejecute otro CLI se lanza con `node "$HOME/.inharness/runtime/runRow.js" launch`
+(recetas abajo; `inharness` lo instala en cada arranque). PROHIBIDO
+ejecutar la fila con `codex exec`, `codex.cmd exec`, `kimi -p` o
+`claude -p` directos, en segundo plano con `&` o `run_in_background`, o
+redirigiendo a mano a `.inharness/log/`: asi la fila corre invisible y el
+usuario no ve nada. Eso vale aunque la tarea se retome de otra sesion y el
+log o `assignment.md` muestren llamadas crudas anteriores.
+
+**Visibilidad en vivo (Windows Terminal):** `launch` abre una pestana
+visible por fila: pane en la ventana actual si esta sesion corre dentro de
+Windows Terminal (WT_SESSION), o pestana en una ventana propia llamada
+"inharness" si no. Espera a que la pestana arranque y vuelve en segundos:
+NO lo envuelvas en segundo plano. Lanza seguidas todas las filas
+independientes y luego espera con `wait` (eso si, en segundo plano si tu
+herramienta lo permite). Lee el JSON de `launch`: si `visible` es false o
+trae `warning`, dile al usuario en ese momento el texto del aviso (fila
+sin ventana, motivo) y no sigas como si tuviera pestana.
 
 **Guardarrail tecnico:** bloquea llamadas crudas a Codex/Kimi mientras
-haya filas activas. Salida de emergencia: `INHARNESS_ALLOW_RAW=1`.
+haya filas activas en `.inharness/assignment.md` (de la carpeta actual, de
+una padre, o del destino de `cd`/`-C`). En texto libre, toda linea que
+empiece por id (F2, P1...) sin "hecho"/"fallido" cuenta como activa. Salida de emergencia: `INHARNESS_ALLOW_RAW=1`.
 La delegacion caduca a las 12 h; la variable no caduca: retirala al terminar.
 Bash: `INHARNESS_ALLOW_RAW=1 comando`; PowerShell: establece
 `$env:INHARNESS_ALLOW_RAW="1"` y retirala despues con
@@ -237,7 +252,8 @@ una instruccion con la ruta relativa citada en JSON para leer el fichero.
 No se ha vuelto a verificar aqui el soporte de stdin de Kimi.
 Codex anade `--output-last-message .inharness/log/<id>-codex-last.txt`.
 
-`launch` imprime una linea JSON con id, cli, mode, pid y log; mode es pane,
+`launch` imprime una linea JSON con id, cli, mode, pid, log, visible y window
+(warning si no hay ventana; si la pestana no arranca, codigo 1); mode es pane,
 tab o fallback. El log esta en `.inharness/log/<id>-<cli>.log`.
 Cuando otra fila dependa de esta, usa `wait`: devuelve 0 si ok, 1 si fallo,
 y JSON con exitCode, aborted, timedOut, error y outputTail (4000 caracteres).

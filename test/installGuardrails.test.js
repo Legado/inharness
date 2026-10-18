@@ -121,3 +121,12 @@ test('regresion: $ y ` en HOME no se expanden en la shell del hook', (t) => {
   assert.equal(run.status, 0, run.stderr);
   assert.equal(run.stderr, '');
 });
+
+test('el guard de Claude cubre Bash y PowerShell en una sola escritura', (t) => {
+  const home = withHome(t);
+  assert.deepEqual(installGuardrails({ silent: true }), ['claude']);
+  const groups = config(path.join(home, '.claude', 'settings.json')).hooks.PreToolUse;
+  assert.deepEqual(groups.map((g) => g.matcher), ['Bash', 'PowerShell']);
+  for (const g of groups) assert.match(g.hooks[0].command, /claudeGuardHook\.js/);
+  assert.deepEqual(installGuardrails({ silent: true }), []);
+});

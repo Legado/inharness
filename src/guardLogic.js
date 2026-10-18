@@ -15,6 +15,7 @@
  */
 
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const BLOCK_MESSAGE = 'inharness: hay una delegacion activa; usa node ~/.inharness/runtime/runRow.js launch --id <id> --cli <codex|kimi> ... (ver las skills). Salida de emergencia: INHARNESS_ALLOW_RAW=1. La delegacion caduca a las 12 h.';
@@ -54,7 +55,9 @@ function exeName(word) {
 /** true si el primer ejecutable de algun segmento invoca Codex o Kimi crudo. */
 function isRawInvocation(command, depth = 0) {
   if (typeof command !== 'string' || depth > 3) return false;
-  if (/paneLauncher|runRow/i.test(command) || command.includes('INHARNESS_ALLOW_RAW=1')) return false;
+  // Solo la salida de emergencia exime al comando entero. Mencionar runRow (p. ej. en un heredoc) no basta:
+  // `node runRow.js ...` ya se descarta abajo porque su ejecutable es runRow, no codex/kimi.
+  if (command.includes('INHARNESS_ALLOW_RAW=1')) return false;
   for (const segment of segments(command)) {
     const words = tokens(segment.trim());
     for (;;) {
@@ -95,8 +98,10 @@ function isRawInvocation(command, depth = 0) {
  */
 function hasActiveRows(markdown) {
   if (!/^\s*\|.*\bestado\b/im.test(markdown)) {
-    // Sin tabla con columna estado (reparto en texto libre): cualquier fila con id (F2, R1...) en curso/pendiente cuenta.
-    return markdown.split(/\r?\n/).some((line) => /^\s*[-*]?\s*[A-Za-z]{1,3}\d+\b/.test(line) && /\b(?:en curso|pendiente)\b/i.test(line));
+    // Sin tabla con columna estado (reparto en texto libre): toda fila con id (F2, P1, R3...) que no diga
+    // hecho/fallido cuenta como activa, diga "pendiente", "parcial", "bloqueada-cupo" o nada.
+    return markdown.split(/\r?\n/).some((line) => /^\s*[-*]?\s*[A-Za-z]{1,3}\d+\b/.test(line)
+      && !/\b(?:hecho|hecha|fallido|fallida|done)\b/i.test(line));
   }
   let statusColumn = -1;
   for (const line of markdown.split(/\r?\n/)) {
@@ -122,12 +127,27 @@ function hasActiveRows(markdown) {
   return false;
 }
 
-/** true si cwd tiene un assignment reciente con alguna fila activa. */
+/** Ruta absoluta del assignment.md mas cercano subiendo desde dir, o null. */
+function findAssignment(dir) {
+  for (let current = dir; ; current = path.dirname(current)) {
+    const candidate = path.join(current, '.inharness', 'assignment.md');
+    try {
+      fs.lstatSync(candidate);
+      return candidate;
+    } catch (err) {
+      if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') throw err;
+    }
+    if (path.dirname(current) === current) return null;
+  }
+}
+
+/** true si cwd (o un ancestro) tiene un assignment reciente con alguna fila activa. */
 function hasActiveDelegation(cwd, { now = Date.now(), staleMs } = {}) {
   if (typeof cwd !== 'string' || !path.isAbsolute(cwd)) return false;
-  const assignmentPath = path.join(cwd, '.inharness', 'assignment.md');
   let markdown;
   try {
+    const assignmentPath = findAssignment(path.resolve(cwd));
+    if (!assignmentPath) return false;
     const hours = Number(process.env.INHARNESS_STALE_HOURS);
     const lifetime = staleMs === undefined ? (Number.isFinite(hours) && hours > 0 ? hours : 12) * 60 * 60 * 1000 : staleMs;
     if (now - fs.statSync(assignmentPath).mtimeMs > lifetime) return false;
@@ -139,4 +159,46 @@ function hasActiveDelegation(cwd, { now = Date.now(), staleMs } = {}) {
   return hasActiveRows(markdown);
 }
 
-module.exports = { isRawInvocation, hasActiveRows, hasActiveDelegation, BLOCK_MESSAGE };
+/** Convierte rutas de Git Bash (/c/x), ~ y $HOME a absolutas de Windows/POSIX relativas a base. */
+function toAbsolute(word, base) {
+  let p = unquote(word);
+  if (!p || /[`*?]|\$\(/.test(p)) return null;
+  p = p.replace(/^(?:~|\$HOME|\$\{HOME\}|\$env:USERPROFILE)(?=$|[\\/])/i, os.homedir());
+  if (process.platform === 'win32') p = p.replace(/^\/([A-Za-z])(?=\/|$)/, '$1:');
+  if (/\$/.test(p)) return null;
+  return path.resolve(base, p);
+}
+
+/**
+ * Directorios donde puede vivir la delegacion de este comando: el cwd del hook, los destinos de `cd`
+ * y los `-C`/`--cd` de codex. Un orquestador abierto en una carpeta padre que hace `cd proyecto && codex exec`
+ * debe verse igual que uno abierto en el proyecto.
+ */
+function candidateDirs(command, cwd) {
+  const dirs = [];
+  const base = typeof cwd === 'string' && path.isAbsolute(cwd) ? cwd : null;
+  if (base) dirs.push(base);
+  if (typeof command !== 'string') return dirs;
+  for (const segment of segments(command)) {
+    const words = tokens(segment.trim());
+    for (let i = 0; i < words.length - 1; i++) {
+      const head = i === 0 ? exeName(words[0]) : '';
+      const isCd = i === 0 && (head === 'cd' || head === 'pushd' || head === 'set-location' || head === 'sl');
+      const isFlag = /^(?:-C|--cd)$/.test(words[i]);
+      if (!isCd && !isFlag) continue;
+      let target = words[i + 1];
+      if (isCd && /^-/.test(target) && words[i + 2]) target = words[i + 2];
+      const abs = toAbsolute(target, base || process.cwd());
+      if (abs && !dirs.includes(abs)) dirs.push(abs);
+    }
+  }
+  return dirs;
+}
+
+/** Decision unica de los dos hooks: true si hay que denegar el comando. */
+function shouldBlock(command, cwd, options) {
+  if (!isRawInvocation(command)) return false;
+  return candidateDirs(command, cwd).some((dir) => hasActiveDelegation(dir, options));
+}
+
+module.exports = { isRawInvocation, hasActiveRows, hasActiveDelegation, candidateDirs, shouldBlock, BLOCK_MESSAGE };

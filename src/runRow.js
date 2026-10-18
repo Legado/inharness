@@ -6,7 +6,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { TextDecoder } = require('node:util');
-const { launchInPane, waitForCompletion } = require('./paneLauncher');
+const { launchInPane, waitForCompletion, waitForStart } = require('./paneLauncher');
 const { buildSpawn } = require('./winArgs');
 
 const ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
@@ -30,6 +30,8 @@ status  [--cwd <dir>]
 Prompt: fichero UTF-8 dentro de cwd (tambien por ruta real), maximo 1 MiB.
 Estado y logs sin enlaces. Timeout maximo: 2147483647 ms.
 Log: <cwd>/.inharness/log/<id>-<cli>.log
+launch: pane (dentro de WT) o tab en la ventana "inharness" (fuera de WT); espera a que la pestana arranque.
+        Sin ventana: mode fallback, visible false y warning (tambien en stderr). Pestana que no arranca: codigo 1.
 Salida: una linea JSON. Codigos: 0 ok, 1 fallo de la fila, 2 error de uso.
 `;
 
@@ -214,7 +216,29 @@ async function main(argv) {
     const spec = buildLaunch(opts, base);
     if (spawnLength(spec) > 32766) throw usage('la linea del CLI supera el limite de CreateProcess');
     const r = launchInPane(spec);
-    emit({ id: base.id, cli: base.cli, mode: r.mode, pid: r.pid, log: r.logFile });
+    const out = { id: base.id, cli: base.cli, mode: r.mode, pid: r.pid, log: r.logFile };
+    if (r.mode === 'fallback') {
+      // Nunca en silencio: el usuario espera ver la fila en una pestana.
+      out.visible = false;
+      out.warning = `SIN VENTANA: la fila se ejecuto invisible (${r.reason}). Dilo al usuario.`;
+      process.stderr.write(`[inharness] AVISO: ${out.warning}\n`);
+      emit(out);
+      return 0;
+    }
+    const startMs = Number(process.env.INHARNESS_START_TIMEOUT_MS);
+    const started = await waitForStart(r.logFile, { timeoutMs: Number.isFinite(startMs) && startMs > 0 ? startMs : 20000 });
+    out.window = r.window;
+    out.visible = started;
+    if (!started) {
+      // Que no arranque tarde una ejecucion que ya se dio por fallida.
+      try { fs.rmSync(r.jobFile, { force: true }); } catch { /* el helper ya lo tomo */ }
+      out.warning = `wt.exe acepto la orden pero la pestana no arranco (ventana "${r.window}"). Dilo al usuario; `
+        + 'relanza con INHARNESS_FORCE_FALLBACK=1 solo si acepta ejecucion sin ventana.';
+      process.stderr.write(`[inharness] ERROR: ${out.warning}\n`);
+      emit(out);
+      return 1;
+    }
+    emit(out);
     return 0;
   }
   if (command === 'wait') {

@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 'use strict';
 
-const { isRawInvocation, hasActiveRows, hasActiveDelegation, BLOCK_MESSAGE } = require('./guardLogic');
+const { isRawInvocation, hasActiveRows, shouldBlock, BLOCK_MESSAGE } = require('./guardLogic');
 
 function evaluate(input) {
   if (input.hook_event_name !== 'PreToolUse' || input.tool_name !== 'Bash') return null;
   const command = input.tool_input && input.tool_input.command;
-  if (!isRawInvocation(command) || !hasActiveDelegation(input.cwd)) return null;
+  if (!shouldBlock(command, input.cwd)) return null;
   return {
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
