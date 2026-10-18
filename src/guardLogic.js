@@ -94,6 +94,10 @@ function isRawInvocation(command, depth = 0) {
  * salir de un bloque de tabla (soporta varias tablas en el mismo fichero).
  */
 function hasActiveRows(markdown) {
+  if (!/^\s*\|.*\bestado\b/im.test(markdown)) {
+    // Sin tabla con columna estado (reparto en texto libre): cualquier fila con id (F2, R1...) en curso/pendiente cuenta.
+    return markdown.split(/\r?\n/).some((line) => /^\s*[-*]?\s*[A-Za-z]{1,3}\d+\b/.test(line) && /\b(?:en curso|pendiente)\b/i.test(line));
+  }
   let statusColumn = -1;
   for (const line of markdown.split(/\r?\n/)) {
     if (!line.trim().startsWith('|')) {

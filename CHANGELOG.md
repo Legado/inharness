@@ -16,6 +16,7 @@ skills usan `runRow.js` en lugar de recetas de shell.
   backup `settings.json.bak-inharness`.
 
 ### Fiabilidad
+- El guard también reconoce repartos en texto libre (filas `F2 ... en curso`) y no solo tablas con columna `estado`.
 - Resultado fuera de banda (`.exit`, `.pid`); `EBUSY` si el log tiene ejecución
   viva (también en fallback concurrente); timeouts, kill de árbol y salida grande íntegra.
 - Runtime estable en `~/.inharness/runtime`; hooks migrados desde rutas antiguas;

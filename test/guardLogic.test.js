@@ -93,3 +93,8 @@ test('detecta envoltorios, shells -c y flags globales de codex', () => {
     assert.equal(isRawInvocation(command), false, command);
   }
 });
+
+test('reparto en texto libre (sin tabla) tambien cuenta como delegacion activa', () => {
+  assert.equal(hasActiveRows('F1 claude HECHO\nF2 codex en curso\nF4 codex pendiente'), true);
+  assert.equal(hasActiveRows('F1 claude HECHO\nF2 codex HECHO'), false);
+});
