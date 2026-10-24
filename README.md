@@ -2,7 +2,7 @@
 
 **Reparte una tarea entre Claude, Codex y Kimi usando las suscripciones que ya pagas. Sin API keys. Sin facturar por token. Sin salir del CLI donde ya trabajas.**
 
-> Versión 0.4.1. Antes de publicarla se sometió a un stress test: orquestación
+> Versión 0.5.0. Antes de publicarla se sometió a un stress test: orquestación
 > de desarrollos reales con decenas de tareas en paralelo entre los tres CLIs.
 > Lo que falló durante esas pruebas está documentado más abajo, junto con cómo
 > se resolvió. Si encuentras un borde que no está cubierto, abre un issue.
@@ -285,6 +285,37 @@ Salidas: `INHARNESS_ALLOW_RAW=1` en el comando permite una invocación cruda pun
 **Catálogo persistente.** Cada arranque de `inharness` también escribe el
 descubrimiento de CLIs/modelos en `~/.inharness/catalog.json` (global, no
 por proyecto), como punto de arranque rápido para las skills.
+
+## Panel de control (inharness status)
+
+`inharness status` muestra el avance de las filas de `.inharness/assignment.md`,
+el estado observado en `.inharness/log/` y la nota del orquestador en
+`.inharness/now.md`. No inicia sesiones ni modifica esos archivos. `inharness`
+sin argumentos conserva el lanzador interactivo.
+
+```text
+inharness status  proyecto  2026-01-01T12:00:00.000Z
+[█████░░░░░] 1/2  running:1 failed:0 dead:0 quota:0 pending:0 done:1
+
+┌──────────────────────────────────────────────────────────┐
+│ AHORA MISMO  (hace 8s)                                   │
+│ QUE HAGO: revisar resultados                              │
+│ ESPERANDO: A1                                             │
+│ SIGUIENTE: ejecutar pruebas                               │
+└──────────────────────────────────────────────────────────┘
+
+ID          ESTADO            CLI/MODELO        TIEMPO    ULTIMA SALIDA
+A1          ● running         codex/modelo      1m 2s     pruebas en curso
+B2          ✔ done            kimi/modelo       40s       terminado
+```
+
+Usa `inharness status --watch` (o `inharness watch`) para refrescar cada cinco
+segundos; `--interval <s>` cambia el intervalo y `q` o Ctrl+C salen. `--cwd
+<dir>` elige el proyecto, `--json` entrega una instantánea para scripts,
+`--ascii` usa caracteres ASCII y `--no-color` desactiva el color. Si stdout no
+es un terminal, `--watch` imprime una sola vez y avisa por stderr. La salida
+del log se limita a dos líneas, se limpia de controles y se redactan secretos
+comunes antes de mostrarla.
 
 ## Tests
 

@@ -56,6 +56,13 @@ trabajo:
   hecho/fallido/bloqueada-cupo). Actualizala tras cada fila, no al final.
 - `.inharness/log/<id>-<cli>.log` - salida cruda de cada llamada.
 
+**Protocolo del panel (`inharness status`):** el orquestador DEBE escribir
+`.inharness/now.md` al arrancar cada fase y cada vez que cambie. Son tres
+lineas: `QUE HAGO: ...`, `ESPERANDO: ...`, `SIGUIENTE: ...`. DEBE mantener
+`assignment.md` con una fila por tarea, id estable y estado normalizado:
+`pendiente`, `en curso`, `hecho`, `fallido` o `bloqueada-cupo`. Actualiza la
+fila en cuanto cambie el estado.
+
 Si `.inharness/assignment.md` ya existe con filas pendientes o
 `bloqueada-cupo`, ofrece
 continuar desde ahi en vez de replanificar desde cero.

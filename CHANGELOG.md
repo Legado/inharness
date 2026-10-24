@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0 — 2026-10-24
+
+### Añadido
+- `inharness status` y `inharness watch`: panel de filas delegadas, progreso,
+  última salida y nota `now.md`, con salida JSON, ASCII y modo de refresco.
+- El protocolo de las skills exige actualizar `now.md` por fase y mantener
+  una fila por tarea en `assignment.md`.
+
 ## 0.4.1 — 2026-10-18
 
 Las filas delegadas vuelven a verse en Windows Terminal.

@@ -8,6 +8,7 @@ const { handoff } = require('../src/handoff');
 const { syncSkills } = require('../src/syncSkills');
 const { installGuardrails } = require('../src/installGuardrails');
 const { installRuntime } = require('../src/installRuntime');
+const { statusExit } = require('../src/status');
 
 function safeStartup(name, action) {
   try { return action(); } catch (err) { console.warn(`inharness: ${name} fallo (${err.message})`); return null; }
@@ -57,7 +58,9 @@ async function main() {
   process.exitCode = code;
 }
 
-main().catch((err) => {
+if (['status', 'watch'].includes(process.argv[2])) {
+  process.exitCode = statusExit(process.argv[2] === 'watch' ? ['--watch', ...process.argv.slice(3)] : process.argv.slice(3));
+} else main().catch((err) => {
   console.error('Error inesperado:', err);
   closeRl();
   process.exitCode = 1;
