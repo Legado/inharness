@@ -1,8 +1,33 @@
 # inharness
 
+## Tablero
+
+`inharness board` (o `inharness dashboard`) abre un tablero a pantalla completa
+en la terminal actual. `inharness board --open` abre una pestaña propia en
+Windows Terminal; en otras terminales imprime la orden para abrirlo aparte.
+Pulsa `1` a `4` para Resumen, Agentes, Plan y Registro; `Tab` cambia de
+pantalla, `p` pausa, `r` refresca y `q` sale. En Registro, `j`/`k` o las flechas
+eligen fila, `Enter` abre su log y `Esc` vuelve. El refresco es cada 2 s;
+`--interval 5` lo cambia. `--once --screen plan --ascii --no-color` imprime una
+instantánea sin pantalla alterna; `--json` emite el modelo completo.
+
+El tablero lee `.inharness/assignment.md`, `now.md`, `log/` y
+`agents/<id>.json`, además del catálogo local y los procesos del sistema.
+Funciona con cualquier CLI orquestador. Para registrar una fila o subagente:
+
+```sh
+inharness report --id A1 --state running --kind row --cli codex --model gpt-6.1-sol
+inharness report --id A1 --state done
+```
+
+`--parent O1` enlaza un subagente con su padre. También se aceptan `--role`,
+`--provider`, `--note` y `--cwd`. Estados: `running`, `done`, `failed`,
+`quota`, `waiting`, `pending`. Un agente `running` sin proceso vivo ni
+actualización durante 10 min aparece como `stale`.
+
 **Reparte una tarea entre Claude, Codex y Kimi usando las suscripciones que ya pagas. Sin API keys. Sin facturar por token. Sin salir del CLI donde ya trabajas.**
 
-> Versión 0.5.0. Antes de publicarla se sometió a un stress test: orquestación
+> Versión 0.6.0. Antes de publicarla se sometió a un stress test: orquestación
 > de desarrollos reales con decenas de tareas en paralelo entre los tres CLIs.
 > Lo que falló durante esas pruebas está documentado más abajo, junto con cómo
 > se resolvió. Si encuentras un borde que no está cubierto, abre un issue.

@@ -45,7 +45,7 @@ function normalizeState(value) {
   return 'pending';
 }
 
-function parseAssignment(markdown) {
+function parseAssignment(markdown, options = {}) {
   const rows = [];
   let columns = null;
   for (const line of String(markdown).split(/\r?\n/)) {
@@ -67,8 +67,10 @@ function parseAssignment(markdown) {
     const id = get('id');
     if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(id)) continue;
     const assignmentStatus = get('estado', 'status');
-    rows.push({ id, role: get('rol', 'alcance'), cliModel: get('cli/modelo', 'cli'), dep: get('dep'),
-      assignmentStatus, assignmentState: normalizeState(assignmentStatus) });
+    const row = { id, role: get('rol', 'alcance'), cliModel: get('cli/modelo', 'cli'), dep: get('dep', 'depende-de', 'dependede', 'depende'),
+      assignmentStatus, assignmentState: normalizeState(assignmentStatus) };
+    if (options.includePlan) { row.tier = get('tier'); row.files = get('ficheros', 'archivos'); }
+    rows.push(row);
   }
   return rows;
 }
@@ -298,4 +300,4 @@ function statusExit(argv, io = { stdout: process.stdout, stderr: process.stderr,
   return 0;
 }
 
-module.exports = { parseAssignment, normalizeState, collectState, redact, render, parseStatusArgs, statusExit, HELP };
+module.exports = { parseAssignment, normalizeState, collectState, safeFile, readInside, clean, redact, render, parseStatusArgs, statusExit, HELP };

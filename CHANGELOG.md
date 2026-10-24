@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.0 — 2026-10-24
+
+### Añadido
+- `inharness board`/`dashboard`: tablero de cuatro pantallas con plan por
+  oleadas, agentes, procesos CLI, proveedores, actividad y seguimiento de logs.
+- `inharness report`: registro agnóstico y atómico de agentes y subagentes en
+  `.inharness/agents/`.
+- Modo `--open` para una pestaña de Windows Terminal; `--once`, `--json`,
+  `--ascii` y `--no-color` para uso no interactivo.
+
 ## 0.5.0 — 2026-10-24
 
 ### Añadido

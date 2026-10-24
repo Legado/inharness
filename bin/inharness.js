@@ -9,6 +9,8 @@ const { syncSkills } = require('../src/syncSkills');
 const { installGuardrails } = require('../src/installGuardrails');
 const { installRuntime } = require('../src/installRuntime');
 const { statusExit } = require('../src/status');
+const { boardExit } = require('../src/board');
+const { reportExit } = require('../src/board/agents');
 
 function safeStartup(name, action) {
   try { return action(); } catch (err) { console.warn(`inharness: ${name} fallo (${err.message})`); return null; }
@@ -60,6 +62,10 @@ async function main() {
 
 if (['status', 'watch'].includes(process.argv[2])) {
   process.exitCode = statusExit(process.argv[2] === 'watch' ? ['--watch', ...process.argv.slice(3)] : process.argv.slice(3));
+} else if (['board', 'dashboard'].includes(process.argv[2])) {
+  process.exitCode = boardExit(process.argv.slice(3));
+} else if (process.argv[2] === 'report') {
+  process.exitCode = reportExit(process.argv.slice(3));
 } else main().catch((err) => {
   console.error('Error inesperado:', err);
   closeRl();
