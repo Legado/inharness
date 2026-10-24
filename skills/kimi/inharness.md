@@ -5,6 +5,10 @@ description: Orquesta una tarea entre Kimi (tu mismo), Claude y Codex por suscri
 
 # inharness - orquestacion multi-CLI por suscripcion (desde Kimi)
 
+## Tablero de control
+
+Al lanzar cualquier fila o subagente, ejecuta `inharness report --id <id> --state running --kind row|subagent --parent <id-padre> --cli <cli>`; al terminar, informa `--state done`, `failed` o `quota`. Manten `.inharness/now.md` al dia con la fase actual. El usuario abre el tablero en otra pestana con `inharness board --open`.
+
 **Primer turno de la sesion, siempre**: antes de responder a lo que pida el
 usuario, anuncia en una linea que este agente esta activo, algo como
 "inharness activo - puedo repartir tareas entre Kimi, Codex y Claude por

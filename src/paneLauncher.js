@@ -375,7 +375,7 @@ async function waitForCompletion(logFile, { pollMs = 1000, timeoutMs = 600000, s
   }
 }
 
-module.exports = { launchInPane, waitForCompletion, waitForStart, hasWindowsTerminal, insideWindowsTerminal, WT_WINDOW_NAME };
+module.exports = { launchInPane, waitForCompletion, waitForStart, hasWindowsTerminal, findWindowsTerminal, insideWindowsTerminal, WT_WINDOW_NAME };
 
 // ---- Helper que corre dentro de la pestana: node paneLauncher.js --inharness-job <ruta> ----
 

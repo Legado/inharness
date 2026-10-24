@@ -5,6 +5,10 @@ description: Orquesta una tarea entre Claude (tú mismo), Codex y Kimi por suscr
 
 # inharness — orquestacion multi-CLI por suscripcion
 
+## Tablero de control
+
+Al lanzar cualquier fila o subagente, ejecuta `inharness report --id <id> --state running --kind row|subagent --parent <id-padre> --cli <cli>`; al terminar, informa `--state done`, `failed` o `quota`. Mantén `.inharness/now.md` al día con la fase actual. El usuario abre el tablero en otra pestaña con `inharness board --open`.
+
 **Cada vez que esta skill se active** (por `/inharness`, o porque la tarea
 encaja en su descripción), tu primera línea de respuesta —antes de
 descubrimiento, antes de nada— es una confirmación explícita:
