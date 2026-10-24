@@ -8,3 +8,7 @@ node_modules/
 # Ruido de otras herramientas de skills que instalan en este directorio
 .agents/
 skills-lock.json
+
+# Secretos locales
+.env*
+!.env.example
