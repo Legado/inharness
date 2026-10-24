@@ -54,6 +54,13 @@ cambie de CLI orquestador a mitad de proceso:
 - `.inharness/log/<id>-<cli>.log` — salida cruda de cada llamada, para
   auditoría si algo falla.
 
+**Protocolo del panel (`inharness status`):** el orquestador DEBE escribir
+`.inharness/now.md` al arrancar cada fase y cada vez que cambie. Son tres
+líneas: `QUE HAGO: ...`, `ESPERANDO: ...`, `SIGUIENTE: ...`. DEBE mantener
+`assignment.md` con una fila por tarea, id estable y estado normalizado:
+`pendiente`, `en curso`, `hecho`, `fallido` o `bloqueada-cupo`. Actualiza la
+fila en cuanto cambie el estado.
+
 Antes de proponer nada, comprueba si `.inharness/assignment.md` ya existe
 con filas pendientes o `bloqueada-cupo` de una sesión anterior — si es así, ofrece continuar
 desde ahí en vez de re-planificar desde cero.
