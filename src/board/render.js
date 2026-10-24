@@ -53,7 +53,7 @@ function render(model, options = {}) {
     'd: completadas en AGENTES; t: periodo en PLAN', 'j/k o flechas: elegir en REGISTRO; Enter: abrir; Esc: volver',
     '?: ayuda; q o Ctrl+C: salir']);
   else if (screen === 'resumen') {
-    const active = model.agents.filter((a) => ['running', 'waiting', 'quota', 'failed', 'stale'].includes(a.state));
+    const active = model.agents.filter((a) => ['running', 'waiting', 'quota', 'stale'].includes(a.state));
     const now = model.now.text.split('\n').filter(Boolean);
     const working = active.length ? active.map((a) => ({ text: `${mark(a.state)} ${a.id} ${a.cli || '-'} ${duration(a.elapsedSeconds)} ${a.note || a.role || ''}`, state: a.state })) : ['(ninguno)'];
     const providers = model.providers.map((p) => {

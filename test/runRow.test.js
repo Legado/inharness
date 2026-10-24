@@ -309,7 +309,7 @@ test('recetas de las tres skills: launch, wait y status invocables en fallback',
     const block = source.match(/\*\*Guardarrail tecnico:\*\*[\s\S]*?Kimi no tiene hooks\./)[0];
     if (guard) assert.equal(block, guard);
     guard = block;
-    const lines = source.split('\n').filter(line => line.startsWith('node "$HOME/.inharness/runtime/runRow.js"'));
+    const lines = source.split(/\r?\n/).filter(line => line.startsWith('node "$HOME/.inharness/runtime/runRow.js"'));
     assert.equal(lines.length, 6, name);
     for (const line of lines) {
       const args = line.slice('node "$HOME/.inharness/runtime/runRow.js" '.length).split(/\s+/);
