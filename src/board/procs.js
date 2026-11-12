@@ -6,7 +6,7 @@ const { clean } = require('../status');
 let cached = [];
 let refreshedAt = 0;
 let pending = false;
-const CLI = /(?:^|[\\/\s'"-])(claude|codex|kimi)(?:\.exe|\.cmd|\.js)?(?:$|[\\/\s'"-])/i;
+const CLI = /(?:^|[\\/\s'"-])(claude|codex|kimi|agy)(?:\.exe|\.cmd|\.js)?(?:$|[\\/\s'"-])/i;
 
 function classify(name, command) {
   const match = `${name || ''} ${command || ''}`.match(CLI);
@@ -32,7 +32,7 @@ function getProcesses(now = Date.now()) {
     pending = true;
     const win = process.platform === 'win32';
     const command = win ? 'powershell' : 'ps';
-    const args = win ? ['-NoProfile', '-Command', "Get-CimInstance Win32_Process | Where-Object {$_.Name -match '^(claude|codex|kimi|node)'} | Select ProcessId,Name,CommandLine,CreationDate | ConvertTo-Json"]
+    const args = win ? ['-NoProfile', '-Command', "Get-CimInstance Win32_Process | Where-Object {$_.Name -match '^(claude|codex|kimi|agy|node)'} | Select ProcessId,Name,CommandLine,CreationDate | ConvertTo-Json"]
       : ['-eo', 'pid,etimes,comm,args'];
     execFile(command, args, { timeout: 4000, maxBuffer: 4 * 1024 * 1024, windowsHide: true }, (error, stdout) => {
       if (!error) cached = parseProcesses(stdout, process.platform, Date.now());

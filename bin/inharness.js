@@ -54,7 +54,7 @@ async function main() {
   }
 
   const chosenCli = available[idx];
-  console.log(`\nEntrando en ${chosenCli.id}. Trabaja normal — cuando quieras modo multiagente, invoca la skill/agente "inharness" (en Claude: /inharness; en Codex: $inharness; en Kimi: ya viene cargado).\n`);
+  console.log(`\nEntrando en ${chosenCli.id}. Trabaja normal — cuando quieras modo multiagente, invoca la skill/agente "inharness" (en Claude: /inharness; en Codex: $inharness; en Kimi: ya viene cargado; en agy: /inharness).\n`);
 
   const code = await handoff(chosenCli);
   process.exitCode = code;

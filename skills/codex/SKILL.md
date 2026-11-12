@@ -1,6 +1,6 @@
 ---
 name: "inharness"
-description: "Orquesta una tarea entre Codex (tu mismo), Claude y Kimi por suscripcion (sin API keys), repartiendo por complejidad/coste y ejecutando con aprobacion del usuario. Usar cuando el usuario pida trabajo multiagente, reparte esto entre modelos, mencione $inharness, o pida usar Claude/Kimi/Codex juntos para una tarea."
+description: "Orquesta una tarea entre Codex (tu mismo), Claude, Kimi y agy (Antigravity/Gemini) por suscripcion (sin API keys), repartiendo por complejidad/coste y ejecutando con aprobacion del usuario. Usar cuando el usuario pida trabajo multiagente, reparte esto entre modelos, mencione $inharness, o pida usar Claude/Kimi/agy/Codex juntos para una tarea."
 ---
 
 # inharness - orquestacion multi-CLI por suscripcion (desde Codex)
@@ -12,20 +12,20 @@ Al lanzar cualquier fila o subagente, ejecuta `inharness report --id <id> --stat
 **Cada vez que se active esta skill** (por `$inharness`, o porque la tarea
 pide trabajo multiagente), tu primera linea de respuesta -antes de
 descubrimiento, antes de nada- es una confirmacion explicita: "inharness
-activo - orquestando entre Codex, Claude y Kimi." Es la unica senal fiable
+activo - orquestando entre Codex, Claude, Kimi y agy." Es la unica senal fiable
 que tiene el usuario de que esto se disparo y no es una respuesta normal;
 no la omitas nunca, ni siquiera si ya la diste antes en la misma sesion
 (cada activacion se anuncia).
 
 Tu (esta sesion de Codex) eres el orquestador. No delegues la decision de
-reparto a otro CLI - razonas tu mismo, y solo invocas a Claude/Kimi por
+reparto a otro CLI - razonas tu mismo, y solo invocas a Claude/Kimi/agy por
 linea de comandos para EJECUTAR las piezas que les toquen. Nunca uses
 `--bare` en Claude ni pases API keys de ningun tipo: todo corre por sesion
 de suscripcion ya logueada.
 
-**Claude y Kimi son binarios de linea de comandos YA instalados y YA
+**Claude, Kimi y agy son binarios de linea de comandos YA instalados y YA
 autenticados por suscripcion en esta maquina** - se invocan como cualquier
-otro comando de terminal para consultas (`claude --version`, `kimi provider list`)
+otro comando de terminal para consultas (`claude --version`, `kimi provider list`, `agy models`)
 y SOLO mediante `runRow.js` para ejecutar filas (Paso 3), nunca por red, nunca
 con una clave de API, nunca eligiendo un "proveedor". Si en algun momento
 te encuentras queriendo pedirle al usuario una API key, una clave, o "que
@@ -45,7 +45,7 @@ que inventar un camino alterno.
 
 Todo el estado vive en `.inharness/` dentro del directorio de trabajo
 actual (creala si no existe) - es la misma convencion que usan las skills
-equivalentes de Claude Code y Kimi, para que cualquiera de los tres pueda
+equivalentes de Claude Code, Kimi y agy, para que cualquiera de los cuatro pueda
 retomar el trabajo:
 
 - `.inharness/discovery.md` - resultado del ultimo Paso 0: CLIs disponibles,
@@ -115,16 +115,21 @@ misma sesion si ya existe (ver "Eficiencia" arriba). Si toca refrescarlo:
 ```bash
 kimi provider list
 kimi provider list --json
+agy models
 claude --version
 ```
 
-Verificacion de suscripcion (nunca API): Kimi debe mostrar `source=oauth`
+Verificacion de suscripcion (nunca API): agy no debe tener `GEMINI_API_KEY`,
+`GOOGLE_API_KEY`, `AGY_ADC_AUTH` ni `modelProvider: gemini` en
+`~/.gemini/antigravity-cli/settings.json` (si no, excluyelo; sin sesion, pide
+al usuario abrir `agy` una vez); Kimi debe mostrar `source=oauth`
 en `provider list`; Claude, si el entorno tiene `ANTHROPIC_API_KEY` seteada
 puede estar en modo API - avisa y excluyela si es asi. Tu (Codex) ya estas
 autenticado por esta sesion.
 
 **Aviso de version**: si `kimi --version` o `claude --version` difieren de
-las ultimas verificadas con esta skill (Kimi 2.1.1, Claude 2.1.268),
+las ultimas verificadas con esta skill (Kimi 2.1.1, Claude 2.1.268; agy sin
+version fijada: di la que veas),
 dilo explicitamente antes de continuar - la sintaxis de abajo se probo
 contra esas versiones.
 
@@ -198,10 +203,19 @@ instalar dependencias ni probar servicios en vivo; prepara tu las
 dependencias y deja esas pruebas a otra fila. Indicalo en el prompt.
 `--effort` admite low|medium|high|xhigh|max|ultra; usa un valor admitido por
 el modelo del catalogo. `--sandbox` admite workspace-write (por defecto)
-o read-only; no se aplica a Kimi ni a Claude.
+o read-only; no se aplica a Kimi, agy ni Claude.
 
 **Kimi:** el prefijo `kimi-code/` se anade automaticamente. Nunca `--auto`
 ni `-y` en modo `-p`. Usa el esfuerzo predeterminado del modelo.
+
+**agy (Antigravity CLI):** reemplaza a Gemini CLI, que desde 2026-06-18 ya no sirve suscripciones
+Google AI Pro/Ultra. El modelo se pasa tal cual (`agy models`); `--effort` admite
+low|medium|high. En modo `-p` las herramientas que piden aprobacion se DENIEGAN sin
+abortar la fila (sale con 0). Una fila que deba editar ficheros o ejecutar comandos
+necesita `--permissions allow-all` (anade `--dangerously-skip-permissions`): solo con
+aprobacion explicita del usuario y para filas de alcance acotado; las de solo
+lectura o analisis van sin el. `--permissions` y `--sandbox` no se aplican a otros CLI.
+Nunca `GEMINI_API_KEY` ni `AGY_ADC_AUTH`: eso es modo API.
 
 **Claude externo:** recibe el prompt por stdin, con `--model`,
 `--permission-mode acceptEdits` y `--add-dir`; nunca `--bare`.
@@ -213,7 +227,7 @@ una sesion interactiva o reasigna la fila. No actives bypass de permisos.
 **REGLA DURA - lanzar filas externas SOLO con runRow.js.** Toda fila que
 ejecute otro CLI se lanza con `node "$HOME/.inharness/runtime/runRow.js" launch`
 (recetas abajo; `inharness` lo instala en cada arranque). PROHIBIDO
-ejecutar la fila con `codex exec`, `codex.cmd exec`, `kimi -p` o
+ejecutar la fila con `codex exec`, `codex.cmd exec`, `kimi -p`, `agy -p` o
 `claude -p` directos, en segundo plano con `&` o `run_in_background`, o
 redirigiendo a mano a `.inharness/log/`: asi la fila corre invisible y el
 usuario no ve nada. Eso vale aunque la tarea se retome de otra sesion y el
@@ -229,14 +243,14 @@ herramienta lo permite). Lee el JSON de `launch`: si `visible` es false o
 trae `warning`, dile al usuario en ese momento el texto del aviso (fila
 sin ventana, motivo) y no sigas como si tuviera pestana.
 
-**Guardarrail tecnico:** bloquea llamadas crudas a Codex/Kimi mientras
+**Guardarrail tecnico:** bloquea llamadas crudas a Codex/Kimi/agy mientras
 haya filas activas en `.inharness/assignment.md` (de la carpeta actual, de
 una padre, o del destino de `cd`/`-C`). En texto libre, toda linea que
 empiece por id (F2, P1...) sin "hecho"/"fallido" cuenta como activa. Salida de emergencia: `INHARNESS_ALLOW_RAW=1`.
 La delegacion caduca a las 12 h; la variable no caduca: retirala al terminar.
 Bash: `INHARNESS_ALLOW_RAW=1 comando`; PowerShell: establece
 `$env:INHARNESS_ALLOW_RAW="1"` y retirala despues con
-`Remove-Item Env:INHARNESS_ALLOW_RAW`. Kimi no tiene hooks.
+`Remove-Item Env:INHARNESS_ALLOW_RAW`. Kimi y agy no tienen hooks.
 El hook de Codex se instala en `~/.codex/hooks.json`; acepta su confianza
 una vez en `/hooks` si aparece como untrusted.
 
@@ -252,15 +266,18 @@ binarios, de hasta 1 MiB. Los logs y su estado no admiten enlaces.
 # kimi
 node "$HOME/.inharness/runtime/runRow.js" launch --id 3 --cli kimi --model kimi-for-coding --prompt-file .inharness/prompts/3.md
 
+# agy
+node "$HOME/.inharness/runtime/runRow.js" launch --id 3 --cli agy --model gemini-3.8-flash-medium --effort medium --prompt-file .inharness/prompts/3.md
+
 # claude
 node "$HOME/.inharness/runtime/runRow.js" launch --id 3 --cli claude --model sonnet --prompt-file .inharness/prompts/3.md
 ```
 
-Codex y Claude reciben el prompt por stdin. Kimi lo recibe como argumento
+Codex y Claude reciben el prompt por stdin. Kimi y agy lo reciben como argumento
 hasta 20000 caracteres, siempre que la linea completa escapada quepa en
 CreateProcess (32767 unidades UTF-16 con el NUL final). Si no cabe, recibe
 una instruccion con la ruta relativa citada en JSON para leer el fichero.
-No se ha vuelto a verificar aqui el soporte de stdin de Kimi.
+No se ha verificado el soporte de stdin de Kimi ni de agy.
 Codex anade `--output-last-message .inharness/log/<id>-codex-last.txt`.
 
 `launch` imprime una linea JSON con id, cli, mode, pid, log, visible y window

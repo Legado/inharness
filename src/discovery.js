@@ -78,6 +78,48 @@ function detectKimi() {
   return { id: 'kimi', installed: true, version, resolvedCmd: cmd, subscriptionOk, authRaw: list.stdout.trim(), models };
 }
 
+// Antigravity CLI (agy): sustituto de Gemini CLI para suscripciones Google AI Free/Pro/Ultra
+// (Gemini CLI dejo de servirlas el 2026-06-18). La sesion vive en el llavero del SO, asi que
+// no hay "login status": se descarta el modo API key y se confia en la sesion cacheada.
+function parseAgyModels(output) {
+  const seen = new Set();
+  for (const line of String(output || '').split(/\r?\n/)) {
+    const slug = line.trim().replace(/^[-*]\s+/, '').split(/\s+/)[0];
+    if (/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/.test(slug) && /[-.\d]/.test(slug)) seen.add(slug);
+  }
+  return [...seen].map((id) => ({ id, displayName: id, meta: {} }));
+}
+
+function agyUsesApiKey(env = process.env, home = os.homedir()) {
+  if (env.GEMINI_API_KEY || env.GOOGLE_API_KEY || env.AGY_ADC_AUTH === 'true') return true;
+  try {
+    const file = path.join(home, '.gemini', 'antigravity-cli', 'settings.json');
+    return JSON.parse(fs.readFileSync(file, 'utf8')).modelProvider === 'gemini';
+  } catch {
+    return false;
+  }
+}
+
+function detectAgy() {
+  const resolved = resolveCmd('agy');
+  if (!resolved) return { id: 'agy', installed: false };
+  const { cmd, version } = resolved;
+
+  const apiKey = agyUsesApiKey();
+  const subscriptionOk = !apiKey;
+  const list = spawnCli(cmd, ['models'], { timeoutMs: 15000 });
+
+  return {
+    id: 'agy',
+    installed: true,
+    version,
+    resolvedCmd: cmd,
+    subscriptionOk,
+    authRaw: apiKey ? 'modo API key/ADC (GEMINI_API_KEY, AGY_ADC_AUTH o modelProvider=gemini)' : 'sin API key (sesion Google cacheada en el llavero)',
+    models: list.ok ? parseAgyModels(list.stdout) : [],
+  };
+}
+
 function detectClaude() {
   const resolved = resolveCmd('claude');
   if (!resolved) return { id: 'claude', installed: false };
@@ -104,7 +146,7 @@ function detectClaude() {
 }
 
 function discoverAll() {
-  return [detectClaude(), detectCodex(), detectKimi()];
+  return [detectClaude(), detectCodex(), detectKimi(), detectAgy()];
 }
 
-module.exports = { discoverAll, detectCodex, detectKimi, detectClaude };
+module.exports = { discoverAll, detectCodex, detectKimi, detectClaude, detectAgy, parseAgyModels, agyUsesApiKey };

@@ -19,7 +19,7 @@ const SYMBOLS = {
   running: ['●', '*', '32'], done: ['✔', '+', '32'], failed: ['✖', 'x', '31'],
   dead: ['☠', 'x', '31'], quota: ['⏸', '!', '33'], pending: ['◌', 'o', '2'],
 };
-const LOG_RE = /^([A-Za-z0-9][A-Za-z0-9_-]{0,63})-(codex|kimi|claude)\.log$/i;
+const LOG_RE = /^([A-Za-z0-9][A-Za-z0-9_-]{0,63})-(codex|kimi|claude|agy)\.log$/i;
 
 function splitMarkdown(line) {
   const cells = [];

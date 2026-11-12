@@ -6,7 +6,7 @@ const path = require('node:path');
 const { parseAssignment, safeFile, readInside, clean } = require('../status');
 const { readAgents } = require('./agents');
 
-const LOG = /^([A-Za-z0-9][A-Za-z0-9_-]{0,63})-(claude|codex|kimi)\.log$/i;
+const LOG = /^([A-Za-z0-9][A-Za-z0-9_-]{0,63})-(claude|codex|kimi|agy)\.log$/i;
 const QUOTA = /usage limit|quota|rate limit|\b429\b|cupo/i;
 const STATES = ['running', 'done', 'failed', 'quota', 'pending', 'waiting', 'stale'];
 const seconds = (start, end) => Number.isFinite(start) ? Math.max(0, Math.floor((end - start) / 1000)) : null;
@@ -165,7 +165,7 @@ function collectBoard(cwd = process.cwd(), now = Date.now(), deps = {}) {
   const counts = Object.fromEntries(STATES.map((s) => [s, allAgents.filter((a) => a.state === s).length]));
   const total = allAgents.length;
   const catalog = deps.catalog === undefined ? catalogFromHome() : deps.catalog;
-  const providers = ['claude', 'codex', 'kimi'].map((cli) => {
+  const providers = ['claude', 'codex', 'kimi', 'agy'].map((cli) => {
     const related = allAgents.filter((a) => a.cli === cli);
     const used = logs.filter((l) => l.cli === cli).sort((a, b) => b.logAt.localeCompare(a.logAt));
     const recentQuota = used.find((l) => l.quotaAt && now - Date.parse(l.quotaAt) >= 0 && now - Date.parse(l.quotaAt) <= 6 * 3600000);

@@ -23,7 +23,7 @@ function setup(t) {
     "process.stdin.on('end',()=>{require('fs').writeFileSync(process.env.FAKE_OUT,JSON.stringify({argv:process.argv.slice(2),stdin:s}));",
     "process.stdout.write('hecho\\n');process.exitCode=+(process.env.FAKE_EXIT||0);});",
   ].join(''));
-  for (const name of ['codex', 'kimi', 'claude']) {
+  for (const name of ['codex', 'kimi', 'claude', 'agy']) {
     if (process.platform === 'win32') {
       fs.writeFileSync(path.join(bin, `${name}.cmd`), [
         '@ECHO off', 'GOTO start', ':find_dp0', 'SET dp0=%~dp0', 'EXIT /b', ':start', 'SETLOCAL', 'CALL :find_dp0',
@@ -79,7 +79,11 @@ test('ayuda y errores de uso devuelven 2 con mensaje en stderr', (t) => {
     [['launch', '--id', '1', '--cli', 'codex', '--model', 'm', '--prompt-file', 'no-existe.md'], /--prompt-file/],
     [['launch', '--id', '1', '--cli', 'codex', '--model', 'm', '--prompt-file', p, '--effort', 'enorme'], /--effort/],
     [['launch', '--id', '1', '--cli', 'codex', '--model', 'm', '--prompt-file', p, '--sandbox', 'danger-full-access'], /--sandbox/],
-    [['launch', '--id', '1', '--cli', 'kimi', '--model', 'm', '--prompt-file', p, '--effort', 'high'], /solo vale para codex/],
+    [['launch', '--id', '1', '--cli', 'kimi', '--model', 'm', '--prompt-file', p, '--effort', 'high'], /solo vale para codex y agy/],
+    [['launch', '--id', '1', '--cli', 'agy', '--model', 'm', '--prompt-file', p, '--effort', 'xhigh'], /--effort debe ser low|medium|high/],
+    [['launch', '--id', '1', '--cli', 'agy', '--model', 'm', '--prompt-file', p, '--sandbox', 'read-only'], /--sandbox solo vale para codex/],
+    [['launch', '--id', '1', '--cli', 'agy', '--model', 'm', '--prompt-file', p, '--permissions', 'todo'], /--permissions debe ser/],
+    [['launch', '--id', '1', '--cli', 'codex', '--model', 'm', '--prompt-file', p, '--permissions', 'allow-all'], /--permissions solo vale para agy/],
     [['launch', '--id', '1', '--cli', 'codex', '--model', 'm', '--prompt-file', p, '--timeout-ms', '-5'], /--timeout-ms/],
     [['launch', '--id', '1', '--cli', 'codex', '--model', 'm', '--prompt-file', p, '--raro', 'x'], /desconocida/],
     [['launch', '--id', '1', '--cli', 'codex', '--model'], /falta el valor/],
@@ -210,7 +214,7 @@ test('rechaza flags repetidos, vacios, ids raros y opciones ignoradas por subcom
     [...launch, '--timeout-ms', '2147483648'],
     [...launch.slice(0, 6), '', '--prompt-file', 'p.md'],
   ]) assert.equal(run(args).code, 2, JSON.stringify(args));
-  for (const cli of ['codex', 'kimi', 'claude']) {
+  for (const cli of ['codex', 'kimi', 'claude', 'agy']) {
     assert.equal(run(['launch', '--id', '1', '--cli', cli, '--model', '--help', '--prompt-file', 'p.md']).code, 2);
   }
 });
@@ -296,21 +300,21 @@ test('wait: JSON completo, cola de 4000, aborto y errores de arranque visibles',
   assert.match(w.json.outputTail, /no se pudo arrancar/);
 });
 
-test('recetas de las tres skills: launch, wait y status invocables en fallback', (t) => {
+test('recetas de las cuatro skills: launch, wait y status invocables en fallback', (t) => {
   const { run, prompt, work } = setup(t);
   fs.mkdirSync(path.join(work, '.inharness', 'prompts'), { recursive: true });
   prompt('.inharness/prompts/3.md', NASTY);
   let guard;
-  for (const name of ['claude/SKILL.md', 'codex/SKILL.md', 'kimi/inharness.md']) {
+  for (const name of ['claude/SKILL.md', 'codex/SKILL.md', 'kimi/inharness.md', 'agy/SKILL.md']) {
     const source = fs.readFileSync(path.join(__dirname, '..', 'skills', name), 'utf8');
     assert.doesNotMatch(source, /npm root -g|node -e|paneLauncher/);
     if (!name.startsWith('claude')) assert.doesNotMatch(source, /[^\x00-\x7f]/);
     assert.match(source, /Busca primero paralelismo real/);
-    const block = source.match(/\*\*Guardarrail tecnico:\*\*[\s\S]*?Kimi no tiene hooks\./)[0];
+    const block = source.match(/\*\*Guardarrail tecnico:\*\*[\s\S]*?Kimi y agy no tienen hooks\./)[0];
     if (guard) assert.equal(block, guard);
     guard = block;
     const lines = source.split(/\r?\n/).filter(line => line.startsWith('node "$HOME/.inharness/runtime/runRow.js"'));
-    assert.equal(lines.length, 6, name);
+    assert.equal(lines.length, 7, name);
     for (const line of lines) {
       const args = line.slice('node "$HOME/.inharness/runtime/runRow.js" '.length).split(/\s+/);
       const r = run(args);
@@ -377,4 +381,41 @@ test('fallback nunca es silencioso: visible false y aviso en stderr y JSON', (t)
   assert.equal(r.json.visible, false);
   assert.match(r.json.warning, /SIN VENTANA.*INHARNESS_FORCE_FALLBACK/);
   assert.match(r.stderr, /\[inharness\] AVISO: SIN VENTANA/);
+});
+
+test('agy: prompt como argumento, modelo y esfuerzo; sin permisos totales por defecto', (t) => {
+  const { run, prompt, dump } = setup(t);
+  const text = 'hola "x" \'y\'; echo PWNED & ^ | > <';
+  const l = run(['launch', '--id', '6', '--cli', 'agy', '--model', 'gemini-3.8-flash-medium', '--effort', 'high', '--prompt-file', prompt('6.md', text)]);
+  assert.equal(l.code, 0, l.stderr);
+  assert.deepEqual(dump().argv, ['-p', text, '--model', 'gemini-3.8-flash-medium', '--effort', 'high']);
+  assert.equal(dump().stdin, '');
+});
+
+test('agy: --permissions allow-all anade --dangerously-skip-permissions y default no', (t) => {
+  const { run, prompt, dump } = setup(t);
+  const file = prompt('7.md', 'hola');
+  assert.equal(run(['launch', '--id', '7', '--cli', 'agy', '--model', 'm', '--permissions', 'allow-all', '--prompt-file', file]).code, 0);
+  assert.deepEqual(dump().argv, ['-p', 'hola', '--model', 'm', '--dangerously-skip-permissions']);
+  assert.equal(run(['launch', '--id', '8', '--cli', 'agy', '--model', 'm', '--permissions', 'default', '--prompt-file', file]).code, 0);
+  assert.deepEqual(dump().argv, ['-p', 'hola', '--model', 'm']);
+});
+
+test('agy: prompt de mas de 20000 caracteres va como instruccion corta con la ruta del fichero', (t) => {
+  const { run, prompt, dump } = setup(t);
+  const l = run(['launch', '--id', '5', '--cli', 'agy', '--model', 'm', '--effort', 'low', '--permissions', 'allow-all',
+    '--prompt-file', prompt('grande.md', 'a'.repeat(20001))]);
+  assert.equal(l.code, 0, l.stderr);
+  assert.deepEqual(dump().argv, ['-p', 'Lee el fichero "grande.md" y ejecuta por completo su contenido', '--model', 'm',
+    '--effort', 'low', '--dangerously-skip-permissions']);
+});
+
+test('agy: wait y status propagan el codigo de salida', (t) => {
+  const { run, prompt } = setup(t);
+  assert.equal(run(['status', '--id', '9', '--cli', 'agy']).json.state, 'unknown');
+  run(['launch', '--id', '9', '--cli', 'agy', '--model', 'm', '--prompt-file', prompt('p.md', 'x')], { FAKE_EXIT: '3' });
+  const w = run(['wait', '--id', '9', '--cli', 'agy', '--timeout-ms', '5000']);
+  assert.equal(w.code, 1);
+  assert.equal(w.json.exitCode, 3);
+  assert.equal(run(['status', '--id', '9', '--cli', 'agy']).json.exitCode, 3);
 });

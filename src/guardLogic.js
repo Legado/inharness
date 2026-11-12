@@ -18,7 +18,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const BLOCK_MESSAGE = 'inharness: hay una delegacion activa; usa node ~/.inharness/runtime/runRow.js launch --id <id> --cli <codex|kimi> ... (ver las skills). Salida de emergencia: INHARNESS_ALLOW_RAW=1. La delegacion caduca a las 12 h.';
+const BLOCK_MESSAGE = 'inharness: hay una delegacion activa; usa node ~/.inharness/runtime/runRow.js launch --id <id> --cli <codex|kimi|claude|agy> ... (ver las skills). Salida de emergencia: INHARNESS_ALLOW_RAW=1. La delegacion caduca a las 12 h.';
 
 function segments(command) {
   const result = [];
@@ -52,7 +52,7 @@ function exeName(word) {
   return unquote(word).replace(/\\/g, '/').split('/').pop().replace(/\.(?:cmd|exe|ps1|js|mjs|cjs)$/i, '').toLowerCase();
 }
 
-/** true si el primer ejecutable de algun segmento invoca Codex o Kimi crudo. */
+/** true si el primer ejecutable de algun segmento invoca Codex, Kimi o agy crudo. */
 function isRawInvocation(command, depth = 0) {
   if (typeof command !== 'string' || depth > 3) return false;
   // Solo la salida de emergencia exime al comando entero. Mencionar runRow (p. ej. en un heredoc) no basta:
@@ -84,6 +84,7 @@ function isRawInvocation(command, depth = 0) {
       if (/^(?:exec|e)$/.test(sub || '')) return true;
     }
     if (executable === 'kimi' && words.some((word) => /^(?:-p|--prompt)(?:=.*)?$/.test(word))) return true;
+    if (executable === 'agy' && words.some((word) => /^(?:-p|--print|--prompt)(?:=.*)?$/.test(word))) return true;
   }
   return false;
 }

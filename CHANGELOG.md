@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.7.0 — 2026-11-12
+
+### Añadido
+- Cuarto CLI: Antigravity (`agy`), el camino por suscripción Google AI
+  Free/Pro/Ultra. Gemini CLI no se integra: desde el 2026-06-18 solo sirve
+  API keys de pago y licencias Code Assist.
+- Detección (`agy models`; se excluye si hay `GEMINI_API_KEY`, `GOOGLE_API_KEY`,
+  `AGY_ADC_AUTH` o `modelProvider: gemini`), `runRow.js --cli agy`
+  (`--effort low|medium|high`, `--permissions default|allow-all`), traspaso,
+  skill propia en `~/.gemini/antigravity-cli/skills/inharness/`, logs/estado/tablero
+  y proveedores, y guardarraíl contra `agy -p` crudo.
+- Verificado contra `agy` 1.5.7 real: sesión de suscripción en modo `-p`,
+  formato de `agy models` (17 modelos), skill instalada, fila de lectura y
+  fila con `--permissions allow-all` (cwd del proyecto correcto).
+- Skills de Claude, Codex y Kimi: reparten también a agy.
+
+
 ## 0.6.0 — 2026-10-24
 
 ### Añadido
