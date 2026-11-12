@@ -151,6 +151,18 @@ No pongas por defecto el modelo mas nuevo/nombrado en "alta" solo por su
 nombre - mira los metadatos reales del catalogo (effort por defecto,
 contexto). Muestralo en 3-4 lineas, nunca en parrafos.
 
+**Modelos de agy**: `agy models` solo da slug + nombre, sin metadatos, y el
+esfuerzo va dentro del slug (`-low|-medium|-high|-xhigh`; no pases `--effort`
+aparte). Elige asi: `baja` = `*-flash-*` en `low`/`medium`; `media` = `flash-high`
+o la familia mayor en `low`/`medium`; `alta` = la familia mayor en `high`/`xhigh`.
+La familia mayor (hoy `gemini-4-*`) se deduce del numero de version, no del
+nombre de codename (argon/hydrogen no dicen nada): si dudas entre dos, haz
+preflight con ambas y decide por el resultado, no por el nombre. No uses
+`claude-*` ni `gpt-oss-*` de agy si el CLI nativo (claude/codex) esta
+disponible y con cupo: gastan cupo de Google y no aportan diversidad. Una fila
+que no necesita razonar (renombrar, formatear, buscar) va a `flash-low`/`flash-medium`;
+una de diseno, depuracion o revision critica, a la familia mayor en `high`.
+
 Para cada nivel, anota tambien un **respaldo** en otro CLI (p. ej.
 `media: kimi/kimi-for-coding - respaldo: claude/sonnet`). Las suscripciones
 tienen cupos (ventanas de 5 horas, limites semanales) y se agotan a mitad
