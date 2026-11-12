@@ -5,10 +5,11 @@
 `inharness board` (o `inharness dashboard`) abre un tablero a pantalla completa
 en la terminal actual. `inharness board --open` abre una pestaña propia en
 Windows Terminal; en otras terminales imprime la orden para abrirlo aparte.
-Pulsa `1` a `4` para Resumen, Agentes, Plan y Registro; `Tab` cambia de
+Pulsa `1` a `5` para Resumen, Agentes, Plan, Registro y Dependencias; `Tab` cambia de
 pantalla, `p` pausa, `r` refresca y `q` sale. En Registro, `j`/`k` o las flechas
-eligen fila, `Enter` abre su log y `Esc` vuelve. El refresco es cada 2 s;
-`--interval 5` lo cambia. `--once --screen plan --ascii --no-color` imprime una
+eligen fila, `Enter` abre su log y `Esc` vuelve. Se refresca solo cada 2 s,
+sin parpadeo (repinta encima y solo si el cuadro cambia); `--interval 5` lo
+cambia. Cada fila muestra CLI, modelo y estado. `--once --screen plan --ascii --no-color` imprime una
 instantánea sin pantalla alterna; `--json` emite el modelo completo.
 
 El tablero lee `.inharness/assignment.md`, `now.md`, `log/` y
@@ -27,7 +28,7 @@ actualización durante 10 min aparece como `stale`.
 
 **Reparte una tarea entre Claude, Codex, Kimi y agy (Antigravity/Gemini) usando las suscripciones que ya pagas. Sin API keys. Sin facturar por token. Sin salir del CLI donde ya trabajas.**
 
-> Versión 0.6.0. Antes de publicarla se sometió a un stress test: orquestación
+> Versión 0.7.0. Antes de publicarla se sometió a un stress test: orquestación
 > de desarrollos reales con decenas de tareas en paralelo entre los tres CLIs.
 > Lo que falló durante esas pruebas está documentado más abajo, junto con cómo
 > se resolvió. Si encuentras un borde que no está cubierto, abre un issue.
