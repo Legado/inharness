@@ -9,6 +9,7 @@ test('handoffArgs fija los argumentos de cada CLI', () => {
   assert.deepEqual(handoffArgs('claude'), []);
   assert.deepEqual(handoffArgs('codex'), ['--no-daemon']);
   assert.deepEqual(handoffArgs('kimi', '/home/u'), ['--agent-file', path.join('/home/u', '.kimi-code', 'agents', 'inharness.md')]);
+  assert.deepEqual(handoffArgs('agy'), []);
 });
 
 test('handoffArgs rechaza un CLI desconocido', () => {

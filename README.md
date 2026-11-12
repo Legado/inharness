@@ -5,10 +5,11 @@
 `inharness board` (o `inharness dashboard`) abre un tablero a pantalla completa
 en la terminal actual. `inharness board --open` abre una pestaña propia en
 Windows Terminal; en otras terminales imprime la orden para abrirlo aparte.
-Pulsa `1` a `4` para Resumen, Agentes, Plan y Registro; `Tab` cambia de
+Pulsa `1` a `5` para Resumen, Agentes, Plan, Registro y Dependencias; `Tab` cambia de
 pantalla, `p` pausa, `r` refresca y `q` sale. En Registro, `j`/`k` o las flechas
-eligen fila, `Enter` abre su log y `Esc` vuelve. El refresco es cada 2 s;
-`--interval 5` lo cambia. `--once --screen plan --ascii --no-color` imprime una
+eligen fila, `Enter` abre su log y `Esc` vuelve. Se refresca solo cada 2 s,
+sin parpadeo (repinta encima y solo si el cuadro cambia); `--interval 5` lo
+cambia. Cada fila muestra CLI, modelo y estado. `--once --screen plan --ascii --no-color` imprime una
 instantánea sin pantalla alterna; `--json` emite el modelo completo.
 
 El tablero lee `.inharness/assignment.md`, `now.md`, `log/` y
@@ -25,9 +26,9 @@ inharness report --id A1 --state done
 `quota`, `waiting`, `pending`. Un agente `running` sin proceso vivo ni
 actualización durante 10 min aparece como `stale`.
 
-**Reparte una tarea entre Claude, Codex y Kimi usando las suscripciones que ya pagas. Sin API keys. Sin facturar por token. Sin salir del CLI donde ya trabajas.**
+**Reparte una tarea entre Claude, Codex, Kimi y agy (Antigravity/Gemini) usando las suscripciones que ya pagas. Sin API keys. Sin facturar por token. Sin salir del CLI donde ya trabajas.**
 
-> Versión 0.6.0. Antes de publicarla se sometió a un stress test: orquestación
+> Versión 0.7.0. Antes de publicarla se sometió a un stress test: orquestación
 > de desarrollos reales con decenas de tareas en paralelo entre los tres CLIs.
 > Lo que falló durante esas pruebas está documentado más abajo, junto con cómo
 > se resolvió. Si encuentras un borde que no está cubierto, abre un issue.
@@ -35,7 +36,7 @@ actualización durante 10 min aparece como `stale`.
 ## El problema
 
 Cada vez más desarrolladores y equipos trabajan con varios asistentes de
-código por suscripción a la vez: Claude Code, Codex CLI, Kimi Code. Cada uno
+código por suscripción a la vez: Claude Code, Codex CLI, Kimi Code, Antigravity CLI. Cada uno
 tiene modelos rápidos y baratos y modelos de frontera, y cada uno tiene su
 propio cupo. En la práctica se usan de uno en uno, porque coordinarlos a mano
 supone abrir varias terminales, copiar contexto de una a otra y recordar cuál
@@ -140,9 +141,10 @@ Deteccion de CLIs (suscripcion, no API):
   ✔ claude   2.1.268  — sin ANTHROPIC_API_KEY
   ✔ codex    0.157.1  — Logged in using ChatGPT
   ✔ kimi     2.1.1    — source=oauth
+  ✔ agy      —        — sin API key (sesion Google cacheada en el llavero)
 
 ¿Con que CLI quieres trabajar (orquestador)?
-  1) claude   2) codex   3) kimi
+  1) claude   2) codex   3) kimi   4) agy
 > 2
 
 Entrando en codex. Trabaja normal.
@@ -153,7 +155,7 @@ Y dentro de esa sesión, cuando haga falta:
 ```
 > $inharness haz una landing sencilla para un producto
 
-inharness activo - orquestando entre Codex, Claude y Kimi.
+inharness activo - orquestando entre Codex, Claude, Kimi y agy.
 
 alta  : codex/gpt-6-astra @ high    · respaldo: claude/opus
 media : kimi/kimi-for-coding        · respaldo: codex/gpt-6-luna
@@ -187,18 +189,27 @@ inharness
 > ```
 
 La primera vez que se ejecuta, instala (o actualiza) las skills nativas en las
-tres herramientas:
+cuatro herramientas:
 
 | CLI | Dónde queda instalado | Cómo se activa dentro de esa sesión |
 |---|---|---|
 | Claude Code | `~/.claude/skills/inharness/` | `/inharness <tarea>` |
 | Codex | `~/.codex/skills/inharness/` | `$inharness <tarea>`, o pidiéndolo con tus palabras |
 | Kimi Code | `~/.kimi-code/agents/inharness.md` | ya viene cargado si entras por `inharness` |
+| Antigravity CLI (`agy`) | `~/.gemini/antigravity-cli/skills/inharness/` | `/inharness <tarea>` |
 
 Necesitas tener instalado, con sesión de suscripción (no por API key), al
-menos uno de los tres: [Claude Code](https://claude.com/product/claude-code),
+menos uno de los cuatro: [Claude Code](https://claude.com/product/claude-code),
 [Codex CLI](https://github.com/openai/codex),
-[Kimi Code](https://github.com/MoonshotAI/kimi-code).
+[Kimi Code](https://github.com/MoonshotAI/kimi-code),
+[Antigravity CLI](https://antigravity.google/docs/install/?tab=cli) (`agy`).
+
+**Gemini CLI no está soportado:** desde el 18/06/2026 ya no sirve suscripciones
+Google AI Pro/Ultra (solo API key de pago). El camino por suscripción de Google
+es `agy`, que `inharness` trata como cuarto CLI. En modo no interactivo `agy`
+deniega las herramientas que piden aprobación; una fila que deba editar o
+ejecutar comandos se lanza con `--permissions allow-all` (añade
+`--dangerously-skip-permissions`) y solo con tu aprobación.
 
 ## Qué hace la skill una vez activada
 
@@ -255,6 +266,7 @@ src/catalogCache.js    persiste el catálogo de CLIs/modelos en ~/.inharness/cat
 skills/claude/         SKILL.md para Claude Code
 skills/codex/          SKILL.md + agents/openai.yaml para Codex
 skills/kimi/           agente markdown para Kimi Code
+skills/agy/            SKILL.md para Antigravity CLI (agy)
 ```
 
 `inharness` no simula el traspaso de terminal: lo hace de verdad
@@ -267,7 +279,7 @@ invisibles: `src/paneLauncher.js` las abre en un split-pane de Windows Terminal
 si la sesión ya vive en él (`WT_SESSION`), en una pestaña nueva si hay `wt.exe`,
 y cae a ejecución síncrona sin ventana si no (`INHARNESS_FORCE_FALLBACK=1` lo
 fuerza). El orquestador no construye comandos: usa
-`node ~/.inharness/runtime/runRow.js launch --id … --cli codex|kimi|claude --model … --prompt-file …`
+`node ~/.inharness/runtime/runRow.js launch --id … --cli codex|kimi|claude|agy --model … --prompt-file …`
 (y `wait`/`status` con `--id` y `--cli`); el log queda en `.inharness/log/<id>-<cli>.log`.
 `INHARNESS_PANE_LINGER_MS` ajusta cuánto sigue abierta la pestaña al terminar (2 s si va bien, 15 s si falla).
 Nada sensible viaja por la línea de comandos de `wt.exe`: los parámetros van en un
@@ -276,7 +288,7 @@ hijo. El resultado se comunica fuera de banda: `<log>.exit` (JSON atómico con
 código, señal, error, `aborted`, tiempos) y `<log>.pid`; no hay centinela en el log.
 `launch` sobre un log con ejecución viva falla con `EBUSY`.
 
-**Windows seguro.** Los shims `.cmd` de npm (`codex`, `kimi`, …) se resuelven y
+**Windows seguro.** Los shims `.cmd` de npm (`codex`, `kimi`, `agy`, …) se resuelven y
 se lanzan como `node script.js` directamente, sin pasar por cmd.exe: no hay
 inyección, saltos de línea ni límite de 8191. Los shims de binario nativo
 (`claude.cmd` → `claude.exe`) lanzan el `.exe` directo. Un `.cmd`/`.bat` que no es shim se
@@ -286,7 +298,7 @@ ejecuta con escape y se rechaza (`EUNSAFEARG`) si contiene `%`, LF, CR o NUL.
 solo se ha verificado en Windows. Windows Terminal es la única vista en vivo.
 
 **Guardarraíl técnico, no solo una regla de prompt.** Que una skill "deba"
-pasar por `paneLauncher` en vez de invocar Codex/Kimi crudo es una
+pasar por `paneLauncher` en vez de invocar Codex/Kimi/agy crudo es una
 instrucción de prompt — y un orquestador puede no seguirla (nos pasó
 construyendo esto). Por eso `inharness` instala, en cada arranque y de
 forma idempotente, un hook `PreToolUse` real:
@@ -298,8 +310,9 @@ forma idempotente, un hook `PreToolUse` real:
   *untrusted* hasta que lo confirmas una vez en `/hooks` dentro de una
   sesión de Codex — es una puerta de seguridad deliberada de Codex, no algo
   que `inharness` pueda o deba saltarse.
-- **Kimi Code**: no tiene mecanismo de hooks hoy. No hay guardarraíl técnico
-  posible ahí todavía — solo la regla de prompt en su skill.
+- **Kimi Code** y **Antigravity CLI (agy)**: no hay mecanismo de hooks verificado.
+  No hay guardarraíl técnico posible ahí todavía — solo la regla de prompt en su skill.
+  (El guardarraíl de Claude y Codex sí bloquea `agy -p` crudo.)
 
 Los hooks apuntan a `~/.inharness/runtime/` (copia estable, no al paquete npx),
 caducan a las 12 h de `assignment.md` (`INHARNESS_STALE_HOURS`) y fallan abiertos.

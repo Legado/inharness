@@ -1,9 +1,16 @@
 'use strict';
 
 const { clean } = require('../status');
-const SCREENS = ['resumen', 'agentes', 'plan', 'registro'];
-const SIGNS = { running: ['●', '*', 32], done: ['✓', '+', 32], failed: ['✗', 'x', 31],
-  quota: ['⏸', '!', 33], waiting: ['◌', 'o', 33], stale: ['?', '?', 33], pending: ['○', 'o', 90] };
+const SCREENS = ['resumen', 'agentes', 'plan', 'registro', 'dependencias'];
+// Un color por estado (antes running/done eran el mismo verde y quota/waiting/stale el mismo amarillo).
+// Amarillo queda SOLO para «sin cupo», que es lo único que necesita decisión.
+const SIGNS = { running: ['●', '*', 36], done: ['✓', '+', 32], failed: ['✗', 'x', 31],
+  quota: ['⏸', '!', 33], waiting: ['◌', 'o', 34], stale: ['?', '?', 35], pending: ['○', 'o', 90] };
+const LABELS = { running: 'en marcha', done: 'hecha', failed: 'fallida', quota: 'sin cupo',
+  waiting: 'esperando', stale: 'sin señal', pending: 'pendiente' };
+const MEANING = { running: 'trabajando ahora', done: 'terminada', failed: 'acabó con error',
+  quota: 'el CLI agotó su límite de uso: hay que relevarla o esperar', waiting: 'espera a otra fila',
+  stale: 'figura en marcha pero no hay proceso vivo', pending: 'aún no ha empezado' };
 function duration(value) {
   if (value == null) return '-';
   if (value < 60) return `${value}s`;
@@ -32,7 +39,7 @@ function render(model, options = {}) {
   };
   const pad = (s, n) => clip(s, n).padEnd(n);
   const tint = (s, state) => color && state ? `\x1b[${(SIGNS[state] || SIGNS.pending)[2]}m${s}\x1b[0m` : s;
-  const mark = (state) => `${(SIGNS[state] || SIGNS.pending)[ascii ? 1 : 0]} ${state}`;
+  const mark = (state) => `${(SIGNS[state] || SIGNS.pending)[ascii ? 1 : 0]} ${LABELS[state] || state}`;
   const box = (title, items, n) => {
     const h = glyph('─', '-'); const v = glyph('│', '|');
     const name = clip(` ${title} `, n - 4);
@@ -48,14 +55,22 @@ function render(model, options = {}) {
   put(`INHARNESS BOARD  ${model.project}  ${screen.toUpperCase()}  ${model.generatedAt}`);
   const doneCells = model.total ? Math.round(20 * model.completed / model.total) : 0;
   put(`[${glyph('█', '#').repeat(doneCells)}${glyph('░', '.').repeat(20 - doneCells)}] ${model.completed}/${model.total}  desde inicio ${duration(model.elapsedSeconds)}`);
-  put(['running', 'done', 'failed', 'quota', 'waiting', 'stale', 'pending'].map((s) => `${s}:${model.counts[s] || 0}`).join('  '));
-  if (options.help) add('AYUDA', ['1-4: pantalla; Tab: siguiente; p: pausa; r: refrescar',
-    'd: completadas en AGENTES; t: periodo en PLAN', 'j/k o flechas: elegir en REGISTRO; Enter: abrir; Esc: volver',
+  // Leyenda: símbolo + nombre + cuántas, cada estado en su color; debajo, qué significa lo que no es obvio.
+  const legendStates = ['running', 'done', 'failed', 'quota', 'waiting', 'stale', 'pending'];
+  out.push(legendStates.filter((st) => st === 'running' || st === 'done' || model.counts[st])
+    .map((st) => tint(`${SIGNS[st][ascii ? 1 : 0]} ${LABELS[st]} ${model.counts[st] || 0}`, st)).join('   '));
+  const hints = legendStates.filter((st) => ['quota', 'waiting', 'stale', 'failed'].includes(st) && model.counts[st])
+    .map((st) => `${LABELS[st]} = ${MEANING[st]}`);
+  for (const hint of hints) put(hint);
+  if (options.help) add('AYUDA', ['1-5: pantalla (5 = dependencias); Tab: siguiente; p: pausa; r: refrescar',
+    'd: completadas en AGENTES y DEPENDENCIAS; t: periodo en PLAN', 'j/k o flechas: elegir en REGISTRO; Enter: abrir; Esc: volver',
     '?: ayuda; q o Ctrl+C: salir']);
   else if (screen === 'resumen') {
-    const active = model.agents.filter((a) => ['running', 'waiting', 'quota', 'stale'].includes(a.state));
+    const isOld = (a) => a.state === 'stale' && (a.elapsedSeconds || 0) > 86400;
+    const oldStale = model.agents.filter(isOld);
+    const active = model.agents.filter((a) => ['running', 'waiting', 'quota', 'stale'].includes(a.state) && !isOld(a));
     const now = model.now.text.split('\n').filter(Boolean);
-    const working = active.length ? active.map((a) => ({ text: `${mark(a.state)} ${a.id} ${a.cli || '-'} ${duration(a.elapsedSeconds)} ${a.note || a.role || ''}`, state: a.state })) : ['(ninguno)'];
+    const working = active.length || oldStale.length ? [...active.map((a) => ({ text: `${mark(a.state)} ${a.id} ${a.cli || '-'}/${a.model || '-'} ${duration(a.elapsedSeconds)} ${a.note || a.role || ''}`, state: a.state })), ...(oldStale.length ? [`+${oldStale.length} filas de hace más de 24 h marcadas en marcha sin proceso vivo (casi seguro terminaron sin avisar); ocultas`] : [])] : ['(ninguno)'];
     const providers = model.providers.map((p) => {
       const cells = p.total ? Math.round(8 * p.done / p.total) : 0;
       return { text: `${p.cli} [${glyph('█', '#').repeat(cells)}${glyph('░', '.').repeat(8 - cells)}] ${p.done}/${p.total || 0} vivos:${p.active} filas:${(p.activeRows || []).join(',') || '-'}${p.quota ? ' cupo?' : ''}`,
@@ -138,6 +153,39 @@ function render(model, options = {}) {
     if (pending.length) add(`PLANIFICADO (${pending.length})`, [...pending.slice(0, 4).map((r) => `${r.id} espera: ${r.dependencies.join(', ') || 'sin dependencias'}`),
       ...(pending.length > 4 ? [`+${pending.length - 4} mas pendientes`] : [])]);
     if (!timed.length && !pending.length) add('PLAN', ['(sin filas en este periodo)']);
+  } else if (screen === 'dependencias') {
+    const byId = new Map(model.rows.map((r) => [r.id, r]));
+    const unlocks = new Map();
+    for (const r of model.rows) for (const d of r.dependencies.filter((x) => byId.has(x))) { if (!unlocks.has(d)) unlocks.set(d, []); unlocks.get(d).push(r.id); }
+    const sym = (id) => { const r = byId.get(id); return r ? `${id}${(SIGNS[r.state] || SIGNS.pending)[ascii ? 1 : 0]}` : `${id}?`; };
+    const rowDeps = (r) => r.dependencies.filter((d) => byId.has(d));
+    const externalDeps = (r) => r.dependencies.filter((d) => !byId.has(d));
+    const oldStale = (r) => r.state === 'stale' && (r.elapsedSeconds || 0) > 86400;
+    const hasOpenChild = (r) => (unlocks.get(r.id) || []).some((id) => byId.get(id) && byId.get(id).state !== 'done');
+    const visible = model.rows.filter((r) => options.showDone || (r.state !== 'done' && !oldStale(r)) || hasOpenChild(r));
+    const hiddenDone = model.rows.length - visible.length;
+    const waves = new Map();
+    for (const r of visible) { const key = r.cycle || r.wave === null ? 'ciclo' : r.wave; if (!waves.has(key)) waves.set(key, []); waves.get(key).push(r); }
+    add('CÓMO LEER ESTO', ['Cada fila muestra de quién depende (←) y a quién desbloquea (→). El símbolo junto al id es su estado.',
+      'Una fila pendiente está LISTA si todo lo que espera ya está hecho, o BLOQUEADA si no.']);
+    const keys = [...waves.keys()].sort((a, b) => (a === 'ciclo') - (b === 'ciclo') || a - b);
+    for (const key of keys) {
+      const title = key === 'ciclo' ? 'DEPENDENCIA CIRCULAR (revisar assignment.md)' : key === 0 ? 'OLA 0 · no esperan a nadie' : `OLA ${key} · esperan a la ola ${key - 1}`;
+      const items = [];
+      for (const r of waves.get(key)) {
+        const pendingDeps = rowDeps(r).filter((d) => byId.get(d).state !== 'done');
+        let verdict = '';
+        if (['pending', 'waiting'].includes(r.state)) verdict = pendingDeps.length ? `  BLOQUEADA por ${pendingDeps.join(', ')}` : '  LISTA para arrancar';
+        items.push({ text: `${mark(r.state)}  ${r.id}  ${r.role || ''}${verdict}`, state: r.state });
+        const ext = externalDeps(r).length ? ` · requiere: ${externalDeps(r).join(' ')}` : '';
+        const left = (rowDeps(r).length ? `← espera a: ${rowDeps(r).map(sym).join(' ')}` : '← no depende de otras filas') + ext;
+        const right = (unlocks.get(r.id) || []).length ? `→ desbloquea: ${unlocks.get(r.id).map(sym).join(' ')}` : '→ no bloquea a nadie';
+        items.push({ text: `     ${left}   ${right}${r.cli ? `   [${r.cli}]` : ''}`, state: r.state === 'done' ? 'pending' : r.state });
+      }
+      add(title, items);
+    }
+    if (!visible.length) add('DEPENDENCIAS', ['(todo está hecho; pulsa d para ver el historial)']);
+    if (hiddenDone > 0 && !options.showDone) out.push(pad(`${hiddenDone} filas hechas o antiguas sin señal ocultas · d: verlas`, width));
   } else {
     const selected = Math.max(0, Number(options.selected) || 0);
     if (options.openLog) {
@@ -147,8 +195,8 @@ function render(model, options = {}) {
   }
   if (out.length >= height) out.length = height - 1;
   while (out.length < height - 1) out.push(' '.repeat(width));
-  const footer = screen === 'registro' ? '1-4 pantalla  Tab siguiente  j/k elegir  Enter abrir  Esc volver  p pausa  r refresca  ? ayuda  q salir'
-    : '1-4 pantalla  Tab siguiente  d completadas  t periodo  p pausa  r refresca  ? ayuda  q salir';
+  const footer = screen === 'registro' ? '1-5 pantalla  Tab siguiente  j/k elegir  Enter abrir  Esc volver  p pausa  r refresca  ? ayuda  q salir'
+    : '1-5 pantalla (5 = dependencias)  Tab siguiente  d completadas  t periodo  p pausa  r refresca  ? ayuda  q salir';
   out.push(pad(footer, width));
   return out.join('\n') + '\n';
 }

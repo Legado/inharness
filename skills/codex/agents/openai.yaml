@@ -1,4 +1,4 @@
 interface:
   display_name: "inharness"
-  short_description: "Orquesta esta tarea entre Codex, Claude y Kimi por suscripcion"
-  default_prompt: "Usa $inharness para repartir esta tarea entre Codex, Claude y Kimi segun complejidad y coste."
+  short_description: "Orquesta esta tarea entre Codex, Claude, Kimi y agy por suscripcion"
+  default_prompt: "Usa $inharness para repartir esta tarea entre Codex, Claude, Kimi y agy segun complejidad y coste."

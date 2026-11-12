@@ -23,3 +23,13 @@ test('reinstala una skill cambiada aunque lleve el marcador de la version actual
   assert.equal(sync().status, 0);
   assert.equal(fs.readFileSync(dest, 'utf8'), fresh);
 });
+
+test('instala la skill de agy en ~/.gemini/antigravity-cli/skills', (t) => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'inharness-sync-agy-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const env = { ...process.env, HOME: home, USERPROFILE: home };
+  const r = spawnSync(process.execPath, ['-e', `require(${JSON.stringify(SYNC)}).syncSkills({ silent: true })`], { env, encoding: 'utf8' });
+  assert.equal(r.status, 0);
+  const dest = path.join(home, '.gemini', 'antigravity-cli', 'skills', 'inharness', 'SKILL.md');
+  assert.match(fs.readFileSync(dest, 'utf8'), /desde agy/);
+});

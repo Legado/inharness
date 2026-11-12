@@ -8,10 +8,10 @@ const { getProcesses } = require('./procs');
 const { collectBoard } = require('./collect');
 const { render, SCREENS } = require('./render');
 
-const HELP = `Uso: inharness board [--open] [--once] [--json] [--screen resumen|agentes|plan|registro] [--interval <s>] [--cwd <dir>] [--ascii] [--no-color]
+const HELP = `Uso: inharness board [--open] [--once] [--json] [--screen resumen|agentes|plan|registro|dependencias] [--interval <s>] [--cwd <dir>] [--ascii] [--no-color]
        inharness dashboard [las mismas opciones]
 
-1-4 pantallas; Tab siguiente; p pausa; r refresca; d completadas; t periodo; ? ayuda; q o Ctrl+C sale.
+1-5 pantallas (5 = dependencias); Tab siguiente; p pausa; r refresca; d completadas; t periodo; ? ayuda; q o Ctrl+C sale.
 En REGISTRO: flechas o j/k eligen fila; Enter abre el log; Esc vuelve.
 `;
 function parseBoardArgs(argv) {
@@ -70,10 +70,14 @@ function boardExit(argv, io = { stdout: process.stdout, stderr: process.stderr, 
   let paused = false;
   let closed = false;
   let timer;
+  let lastFrame = '';
   const refresh = () => {
     if (closed) return;
-    io.stdout.write('\x1b[H\x1b[2J');
-    io.stdout.write(draw());
+    // Sin borrar la pantalla entera (era el parpadeo): se reescribe encima y solo si cambio.
+    const frame = draw();
+    if (frame === lastFrame) return;
+    lastFrame = frame;
+    io.stdout.write('\x1b[H' + frame.split('\n').join('\x1b[K' + '\n') + '\x1b[K\x1b[J');
   };
   const restore = () => {
     if (closed) return;
@@ -90,9 +94,9 @@ function boardExit(argv, io = { stdout: process.stdout, stderr: process.stderr, 
     if (key === 'q' || key === '\x03') { restore(); return; }
     if (key === '?') help = !help;
     else if (key === '\t') { options.screen = SCREENS[(SCREENS.indexOf(options.screen) + 1) % SCREENS.length]; help = false; }
-    else if (/^[1-4]$/.test(key)) { options.screen = SCREENS[Number(key) - 1]; help = false; }
+    else if (/^[1-5]$/.test(key)) { options.screen = SCREENS[Number(key) - 1]; help = false; }
     else if (key === 'p') paused = !paused;
-    else if (key === 'd' && options.screen === 'agentes') showDone = !showDone;
+    else if (key === 'd' && ['agentes', 'dependencias'].includes(options.screen)) showDone = !showDone;
     else if (key === 't' && options.screen === 'plan') period = { '12h': '1h', '1h': 'todo', todo: '12h' }[period];
     else if (key === '\r' && options.screen === 'registro') openLog = true;
     else if (key === '\x1b') openLog = false;

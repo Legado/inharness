@@ -13,11 +13,11 @@ test('detecta invocaciones en posicion de comando, no menciones', () => {
     'codex exec -', 'codex.cmd exec -m x -', 'codex e -',
     'cd x && codex.cmd exec -', 'FOO=1 kimi -m a -p "hola"',
     'C:/Users/U/AppData/Roaming/npm/codex.cmd exec -', 'echo hi | codex exec -',
-    'env FOO=1 kimi --prompt hola',
+    'env FOO=1 kimi --prompt hola', 'agy -p "hola" --model x', 'FOO=1 agy --print hola', 'cd x && agy --model m -p hola',
   ];
   const no = [
     'git commit -m "codex exec"', 'grep "kimi -p" README.md', 'echo codex exec',
-    'cat codex-exec-notes.md', 'codex --version', 'kimi --version',
+    'cat codex-exec-notes.md', 'codex --version', 'kimi --version', 'agy --version', 'agy models', 'grep "agy -p" README.md',
     'node runRow.js launch --cli codex', 'node paneLauncher.js codex exec -',
     'INHARNESS_ALLOW_RAW=1 codex exec -',
   ];

@@ -83,7 +83,7 @@ test('contadores incluyen IDs unicos de filas, subagentes y orquestador', (t) =>
   assert.equal(model.counts.waiting, 1);
   assert.equal(model.counts.done, 1);
   assert.equal(model.agents.filter((a) => a.id === 'A').length, 1);
-  assert.match(render(model, { ascii: true, columns: 80 }), /running:2  done:1/);
+  assert.match(render(model, { ascii: true, columns: 80 }), /en marcha 2\s+\S+ hecha 1/);
   assert.deepEqual(model.providers.find((p) => p.cli === 'codex').activeRows, ['A']);
 });
 test('AGENTES colapsa completadas, conserva ruta de padres y separa procesos libres', (t) => {
@@ -135,8 +135,8 @@ test('PLAN dibuja eje comun, barras temporales y pendientes resumidas', (t) => {
     processes: [{ pid: 7, cli: 'codex', command: 'codex --id A' }] });
   const plan = render(model, { screen: 'plan', period: '1h', ascii: true, columns: 120, rows: 40 });
   assert.match(plan, /LINEA DE TIEMPO 1h 00:00 .. 01:00/);
-  assert.match(plan, /A\s+#+.*running/);
-  assert.match(plan, /B\s+\.*#+.*done/);
+  assert.match(plan, /A\s+#+.*en marcha/);
+  assert.match(plan, /B\s+\.*#+.*hecha/);
   assert.match(plan, /HECHAS ola 1/);
   assert.match(plan, /PLANIFICADO \(1\)/);
   assert.match(plan, /C espera: A, B/);

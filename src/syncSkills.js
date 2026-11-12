@@ -33,6 +33,10 @@ const TARGETS = [
     cli: 'kimi',
     files: [{ from: ['kimi', 'inharness.md'], to: [os.homedir(), '.kimi-code', 'agents', 'inharness.md'] }],
   },
+  {
+    cli: 'agy',
+    files: [{ from: ['agy', 'SKILL.md'], to: [os.homedir(), '.gemini', 'antigravity-cli', 'skills', 'inharness', 'SKILL.md'] }],
+  },
 ];
 
 // Contenido exacto, no solo el marcador: un cambio de texto sin subir la version tambien debe llegar.

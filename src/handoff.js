@@ -12,6 +12,8 @@ function handoffArgs(id, homedir = os.homedir()) {
   if (id === 'claude') return [];
   if (id === 'codex') return ['--no-daemon'];
   if (id === 'kimi') return ['--agent-file', path.join(homedir, '.kimi-code', 'agents', 'inharness.md')];
+  // agy carga la skill inharness de ~/.gemini/antigravity-cli/skills (ver syncSkills); sin argumentos fijos.
+  if (id === 'agy') return [];
   throw new Error(`CLI desconocido: ${id}`);
 }
 

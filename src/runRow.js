@@ -1,7 +1,7 @@
 'use strict';
 
-// CLI estable para que las skills lancen/esperen filas de Codex y Kimi sin comillado ni rutas del paquete.
-// Uso: node runRow.js launch|wait|status --id N --cli codex|kimi [...]. Ningun valor llega a una shell.
+// CLI estable para que las skills lancen/esperen filas de Codex, Kimi, Claude y agy sin comillado ni rutas del paquete.
+// Uso: node runRow.js launch|wait|status --id N --cli codex|kimi|claude|agy [...]. Ningun valor llega a una shell.
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -12,18 +12,21 @@ const { buildSpawn } = require('./winArgs');
 const ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 const MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$/;
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
+const AGY_EFFORTS = ['low', 'medium', 'high'];
 const SANDBOXES = ['workspace-write', 'read-only'];
-const CLIS = ['codex', 'kimi', 'claude'];
+const PERMISSIONS = ['default', 'allow-all'];
+const CLIS = ['codex', 'kimi', 'claude', 'agy'];
 const KIMI_MAX_ARG_CHARS = 20000;
 const MAX_PROMPT_BYTES = 1024 * 1024;
 const TAIL_CHARS = 4000;
 const DEFAULT_WAIT_MS = 600000;
-const FLAGS = ['id', 'cli', 'model', 'effort', 'prompt-file', 'cwd', 'sandbox', 'title', 'timeout-ms'];
+const FLAGS = ['id', 'cli', 'model', 'effort', 'prompt-file', 'cwd', 'sandbox', 'permissions', 'title', 'timeout-ms'];
 
-const HELP = `uso: node runRow.js <launch|wait|status> --id <id> --cli <codex|kimi|claude> [opciones]
+const HELP = `uso: node runRow.js <launch|wait|status> --id <id> --cli <codex|kimi|claude|agy> [opciones]
 
-launch  --model <m> --prompt-file <f> [--effort low|medium|high|xhigh|max|ultra (solo codex)]
-        [--sandbox workspace-write|read-only (solo codex)] [--cwd <dir>] [--title <t>] [--timeout-ms <n>]
+launch  --model <m> --prompt-file <f> [--effort low|medium|high|xhigh|max|ultra (codex) | low|medium|high (agy)]
+        [--sandbox workspace-write|read-only (solo codex)] [--permissions default|allow-all (solo agy)]
+        [--cwd <dir>] [--title <t>] [--timeout-ms <n>]
 wait    [--cwd <dir>] [--timeout-ms <n>] (por defecto ${DEFAULT_WAIT_MS})
 status  [--cwd <dir>]
 
@@ -146,11 +149,13 @@ function buildLaunch(opts, base) {
   if (opts['prompt-file'] === undefined) throw usage('falta --prompt-file');
   const timeoutMs = opts['timeout-ms'] === undefined ? undefined : positiveInt(opts['timeout-ms'], '--timeout-ms');
   if (opts.title !== undefined && (!opts.title.trim() || opts.title.includes('\0'))) throw usage('--title invalido');
-  if (base.cli !== 'codex') {
-    for (const name of ['effort', 'sandbox']) if (opts[name] !== undefined) throw usage(`--${name} solo vale para codex`);
-  }
-  if (opts.effort !== undefined && !EFFORTS.includes(opts.effort)) throw usage(`--effort debe ser ${EFFORTS.join('|')}`);
+  if (base.cli !== 'codex' && opts.sandbox !== undefined) throw usage('--sandbox solo vale para codex');
+  if (base.cli !== 'codex' && base.cli !== 'agy' && opts.effort !== undefined) throw usage('--effort solo vale para codex y agy');
+  if (base.cli !== 'agy' && opts.permissions !== undefined) throw usage('--permissions solo vale para agy');
+  const efforts = base.cli === 'agy' ? AGY_EFFORTS : EFFORTS;
+  if (opts.effort !== undefined && !efforts.includes(opts.effort)) throw usage(`--effort debe ser ${efforts.join('|')}`);
   if (opts.sandbox !== undefined && !SANDBOXES.includes(opts.sandbox)) throw usage(`--sandbox debe ser ${SANDBOXES.join('|')}`);
+  if (opts.permissions !== undefined && !PERMISSIONS.includes(opts.permissions)) throw usage(`--permissions debe ser ${PERMISSIONS.join('|')}`);
   const prompt = readPrompt(opts['prompt-file'], base.cwd);
 
   const spec = { cwd: base.cwd, logFile: base.logRel, timeoutMs, title: opts.title || `inharness ${base.id} ${base.cli}` };
@@ -167,13 +172,22 @@ function buildLaunch(opts, base) {
     const args = ['-p', '--model', opts.model, '--permission-mode', 'acceptEdits', '--add-dir', base.cwd];
     return { ...spec, command: 'claude', args, input: prompt.text };
   }
-  // Conserva -p de Kimi: argumento si cabe, si no instruccion corta con la ruta citada.
-  const kimi = { ...spec, command: 'kimi', args: ['-m', `kimi-code/${opts.model}`, '-p', prompt.text] };
-  if (prompt.text.length > KIMI_MAX_ARG_CHARS || spawnLength(kimi) > 32766) {
-    const shown = JSON.stringify(path.relative(base.cwd, prompt.abs));
-    kimi.args[3] = `Lee el fichero ${shown} y ejecuta por completo su contenido`;
+  // Kimi y agy reciben -p como argumento si cabe; si no, instruccion corta con la ruta citada.
+  // agy: sin --dangerously-skip-permissions las herramientas que piden aprobacion se deniegan
+  // (la fila sigue y sale con 0), asi que solo se anade con --permissions allow-all.
+  const viaArg = base.cli === 'agy'
+    ? { ...spec, command: 'agy', args: ['-p', prompt.text, '--model', opts.model] }
+    : { ...spec, command: 'kimi', args: ['-m', `kimi-code/${opts.model}`, '-p', prompt.text] };
+  const promptAt = viaArg.args.indexOf(prompt.text);
+  if (base.cli === 'agy') {
+    if (opts.effort !== undefined) viaArg.args.push('--effort', opts.effort);
+    if (opts.permissions === 'allow-all') viaArg.args.push('--dangerously-skip-permissions');
   }
-  return kimi;
+  if (prompt.text.length > KIMI_MAX_ARG_CHARS || spawnLength(viaArg) > 32766) {
+    const shown = JSON.stringify(path.relative(base.cwd, prompt.abs));
+    viaArg.args[promptAt] = `Lee el fichero ${shown} y ejecuta por completo su contenido`;
+  }
+  return viaArg;
 }
 
 function readJson(file) {
