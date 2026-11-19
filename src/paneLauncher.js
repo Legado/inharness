@@ -210,7 +210,36 @@ function runFallback({ command, args, absCwd, input, absLog, timeoutMs }) {
   writeExitFile(absLog, exit);
 }
 
-function launchInPane({ command, args = [], cwd, input, logFile, title, timeoutMs } = {}) {
+// Nombre de ventana de WT estable por proyecto: dos proyectos nunca comparten ventana.
+function windowNameFor(absCwd) {
+  const slug = path.basename(absCwd).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'proyecto';
+  const hash = crypto.createHash('sha1').update(absCwd.toLowerCase()).digest('hex').slice(0, 6);
+  return `${WT_WINDOW_NAME}-${slug}-${hash}`;
+}
+
+// Cabecera de la fila: proyecto · tarea · modelo (titulo del pane y primera linea del pane).
+function headerFor(absCwd, title, meta) {
+  const project = path.basename(absCwd) || 'proyecto';
+  const task = (meta && meta.task) || title || 'inharness';
+  const model = meta && meta.cli ? `${meta.cli}${meta.model ? ` ${meta.model}` : ''}` : '';
+  return [project, task, model].filter(Boolean).join(' · ');
+}
+
+// Filas vivas del mismo directorio de logs: si las hay, la ventana del proyecto ya existe.
+function hasLiveRows(absLog) {
+  let names;
+  try { names = fs.readdirSync(path.dirname(absLog)); } catch { return false; }
+  for (const name of names) {
+    if (!name.endsWith('.pid')) continue;
+    const base = path.join(path.dirname(absLog), name.slice(0, -4));
+    if (base === absLog || fs.existsSync(`${base}.exit`)) continue;
+    const pid = parsePid(fs.readFileSync(path.join(path.dirname(absLog), name), 'utf8'));
+    if (Number.isInteger(pid) && processAlive(pid)) return true;
+  }
+  return false;
+}
+
+function launchInPane({ command, args = [], cwd, input, logFile, title, timeoutMs, meta } = {}) {
   const { absCwd, absLog } = validate({ command, args, cwd, input, logFile, title, timeoutMs });
   prepareLog(absCwd, absLog);
   const result = (mode, pid, extra = {}) => ({ mode, pid, logFile: absLog, exitFile: `${absLog}.exit`, ...extra });
@@ -231,26 +260,26 @@ function launchInPane({ command, args = [], cwd, input, logFile, title, timeoutM
   };
 
   if (process.env.INHARNESS_FORCE_FALLBACK === '1') return fallback('INHARNESS_FORCE_FALLBACK=1');
-  const usePane = insideWindowsTerminal();
   let wtExe = null;
   try { wtExe = findWindowsTerminal(); } catch { wtExe = null; }
   if (!wtExe) return fallback(process.platform === 'win32' ? 'no se encontro wt.exe (Windows Terminal)' : 'no es Windows');
 
-  const cleanTitle = sanitizeTitle(title);
+  const header = headerFor(absCwd, title, meta);
+  const cleanTitle = sanitizeTitle(header);
   let jobFile;
   try {
     jobFile = createJobFile({
-      command, args, cwd: absCwd, input: input == null ? null : input, logFile: absLog, title: cleanTitle,
+      command, args, cwd: absCwd, input: input == null ? null : input, logFile: absLog, title: cleanTitle, header,
       timeoutMs: timeoutMs || null,
     });
   } catch (error) {
     return fallback(`no se pudo crear el job: ${error.message}`);
   }
-  // Dentro de WT: pane en la ventana activa. Fuera (sin WT_SESSION, p. ej. VS Code u otra consola), "-w 0"
-  // caeria en una ventana de WT cualquiera, quiza minimizada o detras: se usa una ventana propia con nombre,
-  // que WT crea en primer plano la primera vez y reutiliza (una pestana por fila) despues.
-  const wtWindow = usePane ? '0' : WT_WINDOW_NAME;
-  const wtArgs = ['-w', wtWindow, usePane ? 'split-pane' : 'new-tab', '--title', cleanTitle,
+  // Ventana propia por proyecto (nunca "-w 0": caeria en la pestana activa de otra sesion). La primera fila
+  // abre la ventana con una pestana; las siguientes, mientras haya filas vivas del proyecto, parten un pane.
+  const wtWindow = windowNameFor(absCwd);
+  const split = hasLiveRows(absLog);
+  const wtArgs = ['-w', wtWindow, split ? 'split-pane' : 'new-tab', '--title', cleanTitle, '--suppressApplicationTitle',
     escapeWt(process.execPath), escapeWt(__filename), JOB_FLAG, escapeWt(jobFile)];
 
   let wt;
@@ -269,7 +298,7 @@ function launchInPane({ command, args = [], cwd, input, logFile, title, timeoutM
   }
   wt.on('error', () => {});
   wt.unref();
-  return result(usePane ? 'pane' : 'tab', wt.pid, { window: wtWindow, jobFile });
+  return result(split ? 'pane' : 'tab', wt.pid, { window: wtWindow, jobFile });
 }
 
 // Espera a que el helper de la pestana reserve el log (.pid) o termine (.exit). Si no aparece, wt.exe
@@ -488,7 +517,7 @@ function runJob(jobPath) {
     internalError(error);
     return;
   }
-  try { process.stdout.write(`[inharness] ${job.title || 'inharness'}\n`); } catch { /* */ }
+  try { process.stdout.write(`[inharness] ${job.header || job.title || 'inharness'}\n`); } catch { /* */ }
 
   let spec;
   try {

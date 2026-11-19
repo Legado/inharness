@@ -28,7 +28,7 @@ actualización durante 10 min aparece como `stale`.
 
 **Reparte una tarea entre Claude, Codex, Kimi y agy (Antigravity/Gemini) usando las suscripciones que ya pagas. Sin API keys. Sin facturar por token. Sin salir del CLI donde ya trabajas.**
 
-> Versión 0.7.0. Antes de publicarla se sometió a un stress test: orquestación
+> Versión 0.7.1. Antes de publicarla se sometió a un stress test: orquestación
 > de desarrollos reales con decenas de tareas en paralelo entre los tres CLIs.
 > Lo que falló durante esas pruebas está documentado más abajo, junto con cómo
 > se resolvió. Si encuentras un borde que no está cubierto, abre un issue.
@@ -275,9 +275,11 @@ comandos, con la sintaxis verificada contra sus versiones actuales, y avisa si
 detecta una versión distinta de la probada.
 
 **Visibilidad en vivo (pane → tab → fallback).** Las filas delegadas no corren
-invisibles: `src/paneLauncher.js` las abre en un split-pane de Windows Terminal
-si la sesión ya vive en él (`WT_SESSION`), en una pestaña nueva si hay `wt.exe`,
-y cae a ejecución síncrona sin ventana si no (`INHARNESS_FORCE_FALLBACK=1` lo
+invisibles: `src/paneLauncher.js` las abre en una ventana de Windows Terminal propia de cada proyecto
+(`inharness-<proyecto>-<hash>`, nunca la pestaña activa de otra sesión): la primera fila
+abre la ventana en una pestaña y las siguientes parten un split-pane mientras haya filas
+vivas. Cada pane lleva la cabecera `proyecto · tarea · cli modelo` (título y primera línea).
+Sin `wt.exe` cae a ejecución síncrona sin ventana (`INHARNESS_FORCE_FALLBACK=1` lo
 fuerza). El orquestador no construye comandos: usa
 `node ~/.inharness/runtime/runRow.js launch --id … --cli codex|kimi|claude|agy --model … --prompt-file …`
 (y `wait`/`status` con `--id` y `--cli`); el log queda en `.inharness/log/<id>-<cli>.log`.

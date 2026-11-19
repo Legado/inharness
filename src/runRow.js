@@ -158,7 +158,8 @@ function buildLaunch(opts, base) {
   if (opts.permissions !== undefined && !PERMISSIONS.includes(opts.permissions)) throw usage(`--permissions debe ser ${PERMISSIONS.join('|')}`);
   const prompt = readPrompt(opts['prompt-file'], base.cwd);
 
-  const spec = { cwd: base.cwd, logFile: base.logRel, timeoutMs, title: opts.title || `inharness ${base.id} ${base.cli}` };
+  const spec = { cwd: base.cwd, logFile: base.logRel, timeoutMs, title: opts.title || `inharness ${base.id} ${base.cli}`,
+    meta: { task: opts.title || `fila ${base.id}`, cli: base.cli, model: opts.model } };
   if (base.cli === 'codex') {
     const last = path.join(base.cwd, '.inharness', 'log', `${base.id}-codex-last.txt`);
     const args = ['exec', '-m', opts.model];
