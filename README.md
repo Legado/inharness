@@ -28,7 +28,7 @@ actualización durante 10 min aparece como `stale`.
 
 **Reparte una tarea entre Claude, Codex, Kimi y agy (Antigravity/Gemini) usando las suscripciones que ya pagas. Sin API keys. Sin facturar por token. Sin salir del CLI donde ya trabajas.**
 
-> Versión 0.7.1. Antes de publicarla se sometió a un stress test: orquestación
+> Versión 0.7.2. Antes de publicarla se sometió a un stress test: orquestación
 > de desarrollos reales con decenas de tareas en paralelo entre los tres CLIs.
 > Lo que falló durante esas pruebas está documentado más abajo, junto con cómo
 > se resolvió. Si encuentras un borde que no está cubierto, abre un issue.
@@ -283,6 +283,8 @@ Sin `wt.exe` cae a ejecución síncrona sin ventana (`INHARNESS_FORCE_FALLBACK=1
 fuerza). El orquestador no construye comandos: usa
 `node ~/.inharness/runtime/runRow.js launch --id … --cli codex|kimi|claude|agy --model … --prompt-file …`
 (y `wait`/`status` con `--id` y `--cli`); el log queda en `.inharness/log/<id>-<cli>.log`.
+El runtime instalado en `~/.inharness/runtime` es una copia del repo: si el repo cambió y no se
+resincronizó, `runRow.js` lo detecta (`SOURCE`), se actualiza y se relanza solo con el código nuevo.
 `INHARNESS_PANE_LINGER_MS` ajusta cuánto sigue abierta la pestaña al terminar (2 s si va bien, 15 s si falla).
 Nada sensible viaja por la línea de comandos de `wt.exe`: los parámetros van en un
 fichero temporal de un solo uso (0600, nombre aleatorio) y el prompt por stdin del

@@ -271,7 +271,28 @@ async function main(argv) {
 
 module.exports = { main, parseArgs, statusOf };
 
+// El runtime instalado es una copia: si el repo enlazado cambio y no se resincronizo, se actualiza y se relanza
+// con el codigo nuevo (INHARNESS_RESYNCED evita bucles). Sin esto, la skill ejecuta codigo viejo en silencio.
+function resyncIfStale() {
+  if (process.env.INHARNESS_RESYNCED === '1') return null;
+  const { staleSource } = require('./installRuntime');
+  const source = staleSource();
+  if (!source) return null;
+  try {
+    require(path.join(source, 'installRuntime')).installRuntime({ silent: true });
+    process.stderr.write('[inharness] runtime desactualizado: resincronizado desde ' + source + '\n');
+    const r = require('node:child_process').spawnSync(process.execPath, [__filename, ...process.argv.slice(2)], {
+      stdio: 'inherit', env: { ...process.env, INHARNESS_RESYNCED: '1' },
+    });
+    return r.status === null ? 1 : r.status;
+  } catch {
+    return null;
+  }
+}
+
 if (require.main === module) {
+  const resynced = resyncIfStale();
+  if (resynced !== null) process.exit(resynced);
   main(process.argv.slice(2)).then((code) => { process.exitCode = code; }, (error) => {
     const isUsage = error instanceof UsageError || ['EINVAL', 'ENOTDIR', 'EBADLOG', 'EBUSY', 'EUNSAFEARG'].includes(error.code);
     process.stderr.write(`runRow: ${error.message}\n${isUsage ? 'Use --help para ver la ayuda.\n' : ''}`);
