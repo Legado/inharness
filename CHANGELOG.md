@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.1 — 2026-11-19
+
+### Corregido
+- Los panes de las filas ya no se abren en la pestaña activa de Windows Terminal
+  (`-w 0`), que con varias sesiones abiertas podía ser la de otro proyecto. Ahora
+  cada proyecto tiene su ventana propia: primera fila en pestaña, siguientes en
+  split-pane mientras haya filas vivas.
+
+### Añadido
+- Cabecera en cada pane con proyecto, tarea y CLI/modelo (título fijo con
+  `--suppressApplicationTitle` y primera línea del pane).
+
 ## 0.7.0 — 2026-11-12
 
 ### Añadido
