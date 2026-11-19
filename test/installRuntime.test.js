@@ -26,13 +26,15 @@ test('copia todos los scripts y version; segunda llamada conserva mtime', (t) =>
   assert.equal(runtimeDir(), path.join(root, '.inharness', 'runtime'));
   const first = installRuntime({ silent: true });
   const sources = fs.readdirSync(path.join(__dirname, '..', 'src')).filter((name) => /\.(?:js|cjs)$/.test(name));
-  assert.deepEqual(first.slice().sort(), [...sources, 'VERSION'].sort());
+  assert.deepEqual(first.slice().sort(), [...sources, 'VERSION', 'SOURCE'].sort());
   const file = path.join(runtimeDir(), 'guardLogic.js');
   assert.deepEqual(fs.readFileSync(file), fs.readFileSync(path.join(__dirname, '..', 'src', 'guardLogic.js')));
   assert.equal(fs.readFileSync(path.join(runtimeDir(), 'VERSION'), 'utf8').trim(), require('../package.json').version);
   const before = fs.statSync(file).mtimeMs;
   assert.deepEqual(installRuntime({ silent: true }), []);
   assert.equal(fs.statSync(file).mtimeMs, before);
+  assert.equal(fs.readFileSync(path.join(runtimeDir(), 'SOURCE'), 'utf8').trim(), path.join(__dirname, '..', 'src'));
+  assert.equal(require('../src/installRuntime').staleSource(), null);
   fs.writeFileSync(file, 'viejo');
   assert.deepEqual(installRuntime({ silent: true }), ['guardLogic.js']);
   assert.deepEqual(fs.readFileSync(file), fs.readFileSync(path.join(__dirname, '..', 'src', 'guardLogic.js')));

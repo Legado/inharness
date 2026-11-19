@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.2 — 2026-11-19
+
+### Corregido
+- `runRow.js` ya no ejecuta en silencio un runtime desactualizado. La skill usa la copia de
+  `~/.inharness/runtime`, que solo se refrescaba al arrancar `inharness`: un cambio en el repo
+  (p. ej. la ventana por proyecto de 0.7.1) no surtía efecto y los panes seguían abriéndose
+  en la pestaña activa de otra sesión. Ahora `installRuntime` guarda `SOURCE` y `runRow.js`,
+  si los ficheros difieren, se resincroniza y se relanza con el código nuevo.
+
 ## 0.7.1 — 2026-11-19
 
 ### Corregido

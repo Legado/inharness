@@ -27,8 +27,8 @@ function installRuntime({ silent = false } = {}) {
     const version = JSON.parse(fs.readFileSync(path.join(source, '..', 'package.json'), 'utf8')).version;
     fs.mkdirSync(destination, { recursive: true });
     const updated = [];
-    for (const name of [...files, 'VERSION']) {
-      const content = name === 'VERSION' ? `${version}\n` : fs.readFileSync(path.join(source, name));
+    for (const name of [...files, 'VERSION', 'SOURCE']) {
+      const content = name === 'VERSION' ? `${version}\n` : name === 'SOURCE' ? `${source}\n` : fs.readFileSync(path.join(source, name));
       const target = path.join(destination, name);
       let existing;
       try { existing = fs.readFileSync(target); } catch (err) { if (err.code !== 'ENOENT') throw err; }
@@ -44,4 +44,23 @@ function installRuntime({ silent = false } = {}) {
   }
 }
 
-module.exports = { runtimeDir, installRuntime };
+// Ruta del repo desde el que se instalo este runtime, si sus ficheros ya no coinciden con los instalados.
+// Devuelve null si se ejecuta desde el propio repo, si no hay SOURCE o si todo esta al dia.
+function staleSource() {
+  try {
+    const here = __dirname;
+    const source = fs.readFileSync(path.join(here, 'SOURCE'), 'utf8').trim();
+    if (!source || path.resolve(source) === path.resolve(here) || !fs.statSync(source).isDirectory()) return null;
+    const files = fs.readdirSync(source).filter((name) => /.(?:js|cjs)$/.test(name) && fs.statSync(path.join(source, name)).isFile());
+    for (const name of files) {
+      let installed;
+      try { installed = fs.readFileSync(path.join(here, name)); } catch { return source; }
+      if (!installed.equals(fs.readFileSync(path.join(source, name)))) return source;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+module.exports = { runtimeDir, installRuntime, staleSource };
